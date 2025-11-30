@@ -1,0 +1,184 @@
+// apps/api/src/tasks/tasks.service.ts
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, TaskStatus } from './dto/task.dto';
+
+@Injectable()
+export class TasksService {
+  constructor(private prisma: PrismaService) {}
+
+  /**
+   * 태스크 생성
+   */
+  async create(dto: CreateTaskDto, userId: string) {
+    const task = await this.prisma.task.create({
+      data: {
+        title: dto.title,
+        description: dto.description,
+        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+        assigneeId: dto.assigneeId,
+        isMandatory: dto.isMandatory || false,
+        projectStageId: dto.projectStageId,
+      },
+    });
+
+    // 활동 로그 기록 (MVP #30)
+    await this.createHistory(task.id, userId, 'created', null, 'created');
+
+    return task;
+  }
+
+  /**
+   * 태스크 상세 조회
+   */
+  async findOne(id: string) {
+    const task = await this.prisma.task.findUnique({
+      where: { id },
+      include: {
+        assignee: {
+          select: { id: true, name: true, email: true },
+        },
+        photos: {
+          orderBy: { takenAt: 'desc' },
+        },
+        documents: {
+          orderBy: { createdAt: 'desc' },
+        },
+        histories: {
+          include: {
+            user: {
+              select: { id: true, name: true },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        },
+        projectStage: {
+          include: {
+            project: {
+              select: { id: true, name: true },
+            },
+            template: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!task) {
+      throw new NotFoundException('태스크를 찾을 수 없습니다.');
+    }
+
+    return task;
+  }
+
+  /**
+   * 태스크 수정
+   */
+  async update(id: string, dto: UpdateTaskDto, userId: string) {
+    const existing = await this.findOne(id);
+    const changes: string[] = [];
+
+    // 변경 사항 추적
+    if (dto.title && dto.title !== existing.title) {
+      changes.push(`제목: ${existing.title} → ${dto.title}`);
+    }
+    if (dto.assigneeId && dto.assigneeId !== existing.assigneeId) {
+      changes.push(`담당자 변경`);
+    }
+
+    const task = await this.prisma.task.update({
+      where: { id },
+      data: {
+        title: dto.title,
+        description: dto.description,
+        dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+        assigneeId: dto.assigneeId,
+      },
+    });
+
+    // 변경 내역이 있으면 히스토리 기록
+    if (changes.length > 0) {
+      await this.createHistory(id, userId, 'updated', null, null, changes.join(', '));
+    }
+
+    return task;
+  }
+
+  /**
+   * 태스크 상태 변경 + 히스토리 자동 기록 (MVP #30)
+   * 설계서 핵심 기능
+   */
+  async updateStatus(id: string, dto: UpdateTaskStatusDto, userId: string) {
+    const existing = await this.findOne(id);
+    const oldStatus = existing.status;
+
+    // MVP #20: 착공 강제 조건 체크
+    if (dto.status === TaskStatus.COMPLETED && existing.isMandatory) {
+      // 필수 태스크 완료 시 추가 검증 로직 가능
+      // TODO: 필수 문서 첨부 여부 등 체크
+    }
+
+    const task = await this.prisma.task.update({
+      where: { id },
+      data: { status: dto.status },
+    });
+
+    // MVP #30: 활동 로그 자동 기록
+    await this.createHistory(
+      id,
+      userId,
+      'status_changed',
+      oldStatus,
+      dto.status,
+      dto.comment || `상태 변경: ${this.getStatusLabel(oldStatus)} → ${this.getStatusLabel(dto.status)}`,
+    );
+
+    return task;
+  }
+
+  /**
+   * 태스크 삭제
+   */
+  async remove(id: string, userId: string) {
+    await this.findOne(id);
+    return this.prisma.task.delete({ where: { id } });
+  }
+
+  /**
+   * 히스토리 기록 (내부 메서드)
+   */
+  private async createHistory(
+    taskId: string,
+    userId: string,
+    action: string,
+    oldValue: string | null,
+    newValue: string | null,
+    comment?: string,
+  ) {
+    return this.prisma.taskHistory.create({
+      data: {
+        taskId,
+        userId,
+        action,
+        oldValue,
+        newValue,
+        comment,
+      },
+    });
+  }
+
+  /**
+   * 상태 라벨 변환 (한글)
+   */
+  private getStatusLabel(status: string): string {
+    const labels: Record<string, string> = {
+      pending: '대기',
+      in_progress: '진행중',
+      completed: '완료',
+      delayed: '지연',
+    };
+    return labels[status] || status;
+  }
+}

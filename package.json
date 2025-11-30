@@ -1,0 +1,25 @@
+{
+  "name": "solar-pm-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "태양광 프로젝트 관리 MVP - 모노레포",
+  "scripts": {
+    "dev": "pnpm --parallel -r run dev",
+    "dev:web": "pnpm --filter @solar-pm/web dev",
+    "dev:api": "pnpm --filter @solar-pm/api dev",
+    "build": "pnpm --parallel -r run build",
+    "build:web": "pnpm --filter @solar-pm/web build",
+    "build:api": "pnpm --filter @solar-pm/api build",
+    "db:generate": "pnpm --filter @solar-pm/prisma generate",
+    "db:migrate": "pnpm --filter @solar-pm/prisma migrate:dev",
+    "db:push": "pnpm --filter @solar-pm/prisma db:push",
+    "db:studio": "pnpm --filter @solar-pm/prisma studio",
+    "lint": "pnpm --parallel -r run lint",
+    "clean": "pnpm --parallel -r run clean && rm -rf node_modules"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

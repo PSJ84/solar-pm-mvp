@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Prisma
+packages/prisma/generated/
+
+# Misc
+*.pem
+# dependencies
+node_modules/
+
+# Next.js, Nest 빌드
+.next/
+dist/
+coverage/
+
+# 환경 변수
+.env
+.env.*
+!.env.example
+
+# OS / 에디터
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

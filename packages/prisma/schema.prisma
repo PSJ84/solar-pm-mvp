@@ -1,0 +1,448 @@
+// packages/prisma/schema.prisma
+// ===========================================
+// 태양광 PM MVP - Prisma Schema
+// MVP 필수 기능 매핑:
+// #1: 프로젝트 생성/관리 → Project, ProjectStage
+// #2: 태스크 관리 → Task, TaskTemplate
+// #3: 문서 버전 관리 → Document.revision
+// #5: 현장 사진 업로드 → Photo
+// #6: 오늘 마감 위젯 → Task.dueDate + status
+// #9: 외부 공유 링크 → ShareLink
+// #20: 착공 강제 조건 → Task.isMandatory
+// #24: 문서 만료 알림 → Document.expiryDate
+// #25: 지연 위험 프로젝트 → DelayRiskScore
+// #30: 활동 로그 → TaskHistory
+// ===========================================
+// [v1.1] 추가된 기능:
+// - Soft delete (deletedAt) 지원
+// - tags 필드 (빠른 필터링)
+// - externalId (외부 시스템 연동)
+// - Project: permitNumber, inspectionDate, constructionStartAt
+// - Document: isSupplementary (보완서류 여부)
+// ===========================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================
+// 사용자 & 회사
+// ===========================================
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String?
+  role          String   @default("member") // admin, manager, member
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id])
+  
+  // Relations
+  assignedTasks Task[]         @relation("Assignee")
+  taskHistories TaskHistory[]
+  notifications Notification[]
+  
+  // Magic Link 인증용 (MVP)
+  magicLinkToken    String?   @unique
+  magicLinkExpires  DateTime?
+  
+  // [v1.1] 공통 필드
+  tags          String[]  @default([]) // 역할 태그: ["PM", "현장관리자", "설계"] 등
+  deletedAt     DateTime? // Soft delete
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([email])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Company {
+  id        String    @id @default(cuid())
+  name      String
+  
+  // Relations
+  users     User[]
+  projects  Project[]
+  templates StageTemplate[]
+  
+  // [v1.1] 공통 필드
+  tags      String[]  @default([]) // 회사 분류: ["EPC", "시행사", "금융"] 등
+  deletedAt DateTime? // Soft delete
+  
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([deletedAt])
+  @@map("companies")
+}
+
+// ===========================================
+// 프로젝트 관리 (MVP #1)
+// ===========================================
+
+model Project {
+  id              String         @id @default(cuid())
+  name            String
+  address         String?
+  capacityKw      Float?         // 발전용량 (kW)
+  targetDate      DateTime?      // 목표 준공일
+  status          String         @default("planning") // planning, in_progress, completed, on_hold
+  
+  companyId       String
+  company         Company        @relation(fields: [companyId], references: [id])
+  
+  // [v1.1] 중요 날짜/번호 필드 추가
+  permitNumber        String?    // 발전사업허가 번호
+  inspectionDate      DateTime?  // 사용전검사 예정일 (D-14 패키지 트리거)
+  constructionStartAt DateTime?  // 착공일 (착공 전 필수체크 강제용)
+  
+  // [v1.1] 공통 필드
+  externalId      String?        // 외부 시스템 연동용 (한전 사업번호, 허가번호 등)
+  tags            String[]  @default([]) // ["영농형", "지붕형", "수상", "임대", "자가"] 등
+  deletedAt       DateTime?      // Soft delete
+  
+  // Relations
+  stages          ProjectStage[]
+  documents       Document[]
+  shareLinks      ShareLink[]    // MVP #9: 외부 공유
+  riskScores      DelayRiskScore[] // MVP #25: 지연 위험
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+  @@index([externalId])
+  @@index([deletedAt])
+  @@map("projects")
+}
+
+// ===========================================
+// 단계 & 태스크 템플릿 (재사용 가능한 워크플로우)
+// ===========================================
+
+model StageTemplate {
+  id          String          @id @default(cuid())
+  name        String          // "발전사업허가", "개발행위허가", "사용전검사" 등
+  description String?
+  order       Int             @default(0)
+  
+  companyId   String
+  company     Company         @relation(fields: [companyId], references: [id])
+  
+  // [v1.1] 공통 필드
+  deletedAt   DateTime?       // Soft delete
+  
+  // Relations
+  taskTemplates TaskTemplate[]
+  projectStages ProjectStage[]
+  
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([deletedAt])
+  @@map("stage_templates")
+}
+
+model TaskTemplate {
+  id              String        @id @default(cuid())
+  title           String
+  description     String?
+  isMandatory     Boolean       @default(false) // MVP #20: 착공 전 필수
+  defaultDueDays  Int?          // 기준일 대비 D-day (예: -14 = 14일 전)
+  order           Int           @default(0)
+  
+  stageTemplateId String
+  stageTemplate   StageTemplate @relation(fields: [stageTemplateId], references: [id], onDelete: Cascade)
+  
+  // [v1.1] 공통 필드
+  deletedAt       DateTime?     // Soft delete
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([stageTemplateId])
+  @@index([deletedAt])
+  @@map("task_templates")
+}
+
+// ===========================================
+// 프로젝트별 단계 & 태스크 인스턴스
+// ===========================================
+
+model ProjectStage {
+  id          String        @id @default(cuid())
+  status      String        @default("pending") // pending, active, completed
+  startedAt   DateTime?
+  completedAt DateTime?
+  
+  projectId   String
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  templateId  String
+  template    StageTemplate @relation(fields: [templateId], references: [id])
+  
+  // [v1.1] 공통 필드
+  deletedAt   DateTime?     // Soft delete
+  
+  // Relations
+  tasks       Task[]
+  
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([projectId, templateId])
+  @@index([projectId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("project_stages")
+}
+
+// MVP #2, #6, #20, #30: 태스크 관리
+model Task {
+  id              String        @id @default(cuid())
+  title           String
+  description     String?
+  
+  // MVP #6: 오늘 마감 위젯 연동
+  dueDate         DateTime?
+  status          String        @default("pending") // pending, in_progress, completed, delayed
+  
+  // MVP #20: 착공 강제 조건
+  isMandatory     Boolean       @default(false)
+  
+  // MVP #2: 담당자 배정
+  assigneeId      String?
+  assignee        User?         @relation("Assignee", fields: [assigneeId], references: [id])
+  
+  projectStageId  String
+  projectStage    ProjectStage  @relation(fields: [projectStageId], references: [id], onDelete: Cascade)
+  
+  templateId      String?       // 원본 템플릿 참조 (선택적)
+  
+  // [v1.1] 공통 필드
+  tags            String[]  @default([]) // ["긴급", "대기", "검토필요"] 등
+  deletedAt       DateTime?     // Soft delete
+  
+  // Relations
+  histories       TaskHistory[] // MVP #30: 활동 로그
+  photos          Photo[]       // MVP #5: 현장 사진
+  documents       Document[]
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([projectStageId])
+  @@index([assigneeId])
+  @@index([dueDate])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("tasks")
+}
+
+// MVP #30: 활동 로그 (태스크 변경 히스토리)
+model TaskHistory {
+  id        String   @id @default(cuid())
+  action    String   // "created", "status_changed", "assignee_changed", "comment"
+  oldValue  String?  // 이전 값
+  newValue  String?  // 새 값
+  comment   String?  // 추가 코멘트
+  
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("task_histories")
+}
+
+// ===========================================
+// 문서 관리 (MVP #3, #24)
+// ===========================================
+
+model Document {
+  id           String    @id @default(cuid())
+  fileName     String
+  fileUrl      String
+  fileSize     Int?      // bytes
+  mimeType     String?
+  
+  // MVP #3: 문서 보완 버전 관리
+  revision     Int       @default(1)
+  parentId     String?   // 이전 버전 참조
+  
+  // [v1.1] 보완서류 여부 추가
+  isSupplementary Boolean @default(false) // 보완서류 여부 (같은 태스크에 여러 번 올릴 때 구분)
+  
+  // MVP #24: 문서 만료 알림
+  expiryDate   DateTime?
+  docType      String?   // "permit", "certificate", "contract", "report" 등
+  
+  projectId    String
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  taskId       String?
+  task         Task?     @relation(fields: [taskId], references: [id])
+  
+  uploadedById String?
+  
+  // [v1.1] 공통 필드
+  externalId   String?   // 외부 문서 ID (허가번호, 접수번호 등)
+  tags         String[]  @default([]) // ["허가증", "계약서", "구조계산서", "보완"] 등
+  deletedAt    DateTime? // Soft delete
+  
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([projectId])
+  @@index([taskId])
+  @@index([expiryDate])
+  @@index([externalId])
+  @@index([deletedAt])
+  @@map("documents")
+}
+
+// MVP #5: 현장 사진 업로드
+model Photo {
+  id          String    @id @default(cuid())
+  fileName    String
+  fileUrl     String
+  fileSize    Int?
+  
+  // GPS 정보 (선택적)
+  latitude    Float?
+  longitude   Float?
+  
+  description String?
+  takenAt     DateTime  @default(now())
+  
+  taskId      String
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  uploadedById String?
+  
+  // [v1.1] 공통 필드
+  tags        String[]  @default([]) // ["착공전", "시공중", "완공"] 등
+  deletedAt   DateTime? // Soft delete
+  
+  createdAt   DateTime  @default(now())
+
+  @@index([taskId])
+  @@index([takenAt])
+  @@index([deletedAt])
+  @@map("photos")
+}
+
+// ===========================================
+// 알림 시스템
+// ===========================================
+
+model Notification {
+  id           String   @id @default(cuid())
+  type         String   // "due_today", "due_in_7", "expiry_30", "status_changed"
+  title        String
+  message      String
+  isRead       Boolean  @default(false)
+  
+  // 관련 엔티티 (선택적)
+  projectId    String?
+  taskId       String?
+  
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ===========================================
+// MVP #9: 외부 공유 링크
+// ===========================================
+
+model ShareLink {
+  id           String    @id @default(cuid())
+  token        String    @unique @default(cuid())
+  
+  // 선택적 보안 설정
+  password     String?   // hashed password
+  expiresAt    DateTime?
+  
+  // 공유 범위 설정
+  allowedStages String[] // 특정 단계만 공유 (빈 배열 = 전체)
+  
+  viewCount    Int       @default(0)
+  lastViewedAt DateTime?
+  
+  projectId    String
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  createdById  String?
+  
+  // [v1.1] 공통 필드
+  externalId   String?   // 외부 공유 링크 ID
+  tags         String[]  @default([]) // ["고객용", "내부검토", "금융기관"] 등
+  deletedAt    DateTime? // Soft delete
+  
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([token])
+  @@index([projectId])
+  @@index([externalId])
+  @@index([deletedAt])
+  @@map("share_links")
+}
+
+// ===========================================
+// MVP #25: 지연 위험 점수
+// ===========================================
+
+model DelayRiskScore {
+  id              String   @id @default(cuid())
+  
+  // 위험 점수 (0-100)
+  score           Int      @default(0)
+  severity        String   @default("low") // low, medium, high, critical
+  
+  // 계산 기준 데이터
+  overdueTaskCount    Int  @default(0)
+  upcomingTaskCount   Int  @default(0)
+  completionRate      Float @default(0)
+  
+  // [v1.1] 추가 계산 데이터
+  maxDelayDays        Int   @default(0) // 최대 지연 일수
+  
+  // 위험 요인 설명
+  factors         String[] // ["3개 태스크 마감 초과", "진행률 30% 미만"]
+  
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  calculatedAt    DateTime @default(now())
+
+  @@index([projectId])
+  @@index([severity])
+  @@index([calculatedAt])
+  @@map("delay_risk_scores")
+}
