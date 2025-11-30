@@ -25,7 +25,8 @@ export class TasksController {
   @Post()
   @ApiOperation({ summary: '태스크 생성' })
   async create(@Body() dto: CreateTaskDto, @Req() req: any) {
-    return this.tasksService.create(dto, req.user.sub);
+    const user = (req as any).user;
+    return this.tasksService.create(dto, user?.sub);
   }
 
   @Get(':id')
@@ -41,7 +42,8 @@ export class TasksController {
     @Body() dto: UpdateTaskDto,
     @Req() req: any,
   ) {
-    return this.tasksService.update(id, dto, req.user.sub);
+    const user = (req as any).user;
+    return this.tasksService.update(id, dto, user?.sub);
   }
 
   @Patch(':id/status')
@@ -51,12 +53,14 @@ export class TasksController {
     @Body() dto: UpdateTaskStatusDto,
     @Req() req: any,
   ) {
-    return this.tasksService.updateStatus(id, dto, req.user.sub);
+    const user = (req as any).user;
+    return this.tasksService.updateStatus(id, dto, user?.sub);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: '태스크 삭제' })
   async remove(@Param('id') id: string, @Req() req: any) {
-    return this.tasksService.remove(id, req.user.sub);
+    const user = (req as any).user;
+    return this.tasksService.remove(id, user?.sub);
   }
 }

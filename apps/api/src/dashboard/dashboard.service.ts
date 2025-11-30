@@ -12,6 +12,21 @@ import {
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
+  // NOTE: 인증이 없을 때에도 동작하도록 companyId를 안전하게 해석
+  private async resolveCompanyId(optionalCompanyId?: string): Promise<string> {
+    if (optionalCompanyId) return optionalCompanyId;
+
+    let company = await this.prisma.company.findFirst();
+
+    if (!company) {
+      company = await this.prisma.company.create({
+        data: { name: 'Local Dev Company' },
+      });
+    }
+
+    return company.id;
+  }
+
   /**
    * [v1.1] 대시보드 통합 Summary API
    * - 오늘 마감 태스크
@@ -20,14 +35,16 @@ export class DashboardService {
    * - 지연 위험 프로젝트
    * - 통계 요약
    */
-  async getFullSummary(userId: string, companyId: string): Promise<DashboardSummaryDto> {
+  async getFullSummary(userId?: string, companyId?: string): Promise<DashboardSummaryDto> {
+    const resolvedCompanyId = await this.resolveCompanyId(companyId);
+
     const [todayTasks, upcoming7Days, expiringDocuments, riskProjects, stats] =
       await Promise.all([
-        this.getTodayTasksForSummary(userId, companyId),
-        this.getUpcoming7DaysTasksForSummary(userId, companyId),
-        this.getExpiringDocumentsForSummary(companyId),
-        this.getRiskProjectsForSummary(companyId),
-        this.getStatsForSummary(userId, companyId),
+        this.getTodayTasksForSummary(userId, resolvedCompanyId),
+        this.getUpcoming7DaysTasksForSummary(userId, resolvedCompanyId),
+        this.getExpiringDocumentsForSummary(resolvedCompanyId),
+        this.getRiskProjectsForSummary(resolvedCompanyId),
+        this.getStatsForSummary(userId, resolvedCompanyId),
       ]);
 
     return {
@@ -43,7 +60,7 @@ export class DashboardService {
    * 오늘 마감 태스크 (Summary용)
    */
   private async getTodayTasksForSummary(
-    userId: string,
+    userId: string | undefined,
     companyId: string,
   ): Promise<TaskSummaryItem[]> {
     const today = new Date();
@@ -53,7 +70,7 @@ export class DashboardService {
 
     const tasks = await this.prisma.task.findMany({
       where: {
-        assigneeId: userId,
+        assigneeId: userId || undefined,
         deletedAt: null,
         dueDate: {
           gte: today,
@@ -101,7 +118,7 @@ export class DashboardService {
    * D+1 ~ D+7 마감 태스크 (Summary용)
    */
   private async getUpcoming7DaysTasksForSummary(
-    userId: string,
+    userId: string | undefined,
     companyId: string,
   ): Promise<TaskSummaryItem[]> {
     const today = new Date();
@@ -113,7 +130,7 @@ export class DashboardService {
 
     const tasks = await this.prisma.task.findMany({
       where: {
-        assigneeId: userId,
+        assigneeId: userId || undefined,
         deletedAt: null,
         dueDate: {
           gte: tomorrow,
@@ -331,7 +348,7 @@ export class DashboardService {
    * 통계 요약
    */
   private async getStatsForSummary(
-    userId: string,
+    userId: string | undefined,
     companyId: string,
   ): Promise<DashboardSummaryDto['stats']> {
     const today = new Date();
@@ -403,7 +420,8 @@ export class DashboardService {
   /**
    * MVP #6: 오늘 마감 태스크 조회
    */
-  async getTodayTasks(userId: string, companyId: string) {
+  async getTodayTasks(userId?: string, companyId?: string) {
+    const resolvedCompanyId = await this.resolveCompanyId(companyId);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -411,7 +429,7 @@ export class DashboardService {
 
     const tasks = await this.prisma.task.findMany({
       where: {
-        assigneeId: userId,
+        assigneeId: userId || undefined,
         deletedAt: null,
         dueDate: {
           gte: today,
@@ -423,7 +441,7 @@ export class DashboardService {
         projectStage: {
           deletedAt: null,
           project: {
-            companyId,
+            companyId: resolvedCompanyId,
             deletedAt: null,
           },
         },
@@ -463,7 +481,8 @@ export class DashboardService {
   /**
    * 이번 주 마감 태스크 조회 (확장)
    */
-  async getUpcomingTasks(userId: string, companyId: string, days = 7) {
+  async getUpcomingTasks(userId?: string, companyId?: string, days = 7) {
+    const resolvedCompanyId = await this.resolveCompanyId(companyId);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const endDate = new Date(today);
@@ -471,7 +490,7 @@ export class DashboardService {
 
     const tasks = await this.prisma.task.findMany({
       where: {
-        assigneeId: userId,
+        assigneeId: userId || undefined,
         deletedAt: null,
         dueDate: {
           gte: today,
@@ -483,7 +502,7 @@ export class DashboardService {
         projectStage: {
           deletedAt: null,
           project: {
-            companyId,
+            companyId: resolvedCompanyId,
             deletedAt: null,
           },
         },
@@ -509,38 +528,41 @@ export class DashboardService {
   /**
    * MVP #25: 지연 위험 프로젝트 조회
    */
-  async getRiskProjects(companyId: string) {
-    const riskProjects = await this.getRiskProjectsForSummary(companyId);
+  async getRiskProjects(companyId?: string) {
+    const resolvedCompanyId = await this.resolveCompanyId(companyId);
+
+    const riskProjects = await this.getRiskProjectsForSummary(resolvedCompanyId);
     return riskProjects.filter((p) => p.severity !== 'low');
   }
 
   /**
    * 대시보드 요약 통계 (기존 API 유지)
    */
-  async getSummary(userId: string, companyId: string) {
+  async getSummary(userId?: string, companyId?: string) {
+    const resolvedCompanyId = await this.resolveCompanyId(companyId);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const projectStats = await this.prisma.project.groupBy({
       by: ['status'],
-      where: { companyId, deletedAt: null },
+      where: { companyId: resolvedCompanyId, deletedAt: null },
       _count: true,
     });
 
     const myTaskStats = await this.prisma.task.groupBy({
       by: ['status'],
       where: {
-        assigneeId: userId,
+        assigneeId: userId || undefined,
         deletedAt: null,
         projectStage: {
-          project: { companyId, deletedAt: null },
+          project: { companyId: resolvedCompanyId, deletedAt: null },
         },
       },
       _count: true,
     });
 
-    const todayTasks = await this.getTodayTasks(userId, companyId);
-    const riskProjects = await this.getRiskProjects(companyId);
+    const todayTasks = await this.getTodayTasks(userId, resolvedCompanyId);
+    const riskProjects = await this.getRiskProjects(resolvedCompanyId);
 
     return {
       projects: {
