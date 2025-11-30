@@ -36,7 +36,10 @@ export default function ProjectDetailPage() {
   const [isCloning, setIsCloning] = useState(false);
 
   const projectQueryKey = useMemo(() => ['project', projectId], [projectId]);
-  const activityQueryKey = useMemo(() => ['project', projectId, 'activity-log'], [projectId]);
+  const activityQueryKey = useMemo(
+    () => ['project', projectId, 'activity-log'],
+    [projectId],
+  );
 
   const resolveNextStatus = (status: TaskStatus): TaskStatus => {
     if (status === 'pending') return 'in_progress';
@@ -98,7 +101,9 @@ export default function ProjectDetailPage() {
           totalTasks: allTasks.length,
           completedTasks: completedTasks.length,
           progress:
-            allTasks.length > 0 ? Math.round((completedTasks.length / allTasks.length) * 100) : 0,
+            allTasks.length > 0
+              ? Math.round((completedTasks.length / allTasks.length) * 100)
+              : 0,
         });
       }
 
@@ -149,13 +154,18 @@ export default function ProjectDetailPage() {
     [activeStageId, project?.stages],
   );
 
-  const activeTasks: Task[] = useMemo(() => activeStage?.tasks || [], [activeStage?.tasks]);
+  const activeTasks: Task[] = useMemo(
+    () => activeStage?.tasks || [],
+    [activeStage?.tasks],
+  );
 
   const taskCounts = useMemo(() => {
     const allTasks = project?.stages?.flatMap((s) => s.tasks || []) || [];
     return {
       total: project?.totalTasks || allTasks.length,
-      completed: project?.completedTasks || allTasks.filter((task) => task.status === 'completed').length,
+      completed:
+        project?.completedTasks ||
+        allTasks.filter((task) => task.status === 'completed').length,
     };
   }, [project]);
 
@@ -203,7 +213,10 @@ export default function ProjectDetailPage() {
         <div className="bg-white border border-slate-200 rounded-xl p-8 text-center space-y-3">
           <AlertCircle className="h-10 w-10 text-red-500 mx-auto" />
           <p className="text-slate-700">프로젝트를 불러오는 중 오류가 발생했습니다.</p>
-          <Link href="/dashboard" className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700"
+          >
             <ArrowLeft className="h-4 w-4" /> 대시보드로 돌아가기
           </Link>
         </div>
@@ -218,7 +231,10 @@ export default function ProjectDetailPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+              <Link
+                href="/dashboard"
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
                 <ArrowLeft className="h-5 w-5 text-slate-600" />
               </Link>
               <div>
@@ -243,11 +259,16 @@ export default function ProjectDetailPage() {
               {/* 진행률 */}
               <div className="text-right hidden sm:block">
                 <div className="text-sm text-slate-600">진행률</div>
-                <div className="font-bold text-slate-900">{project.progress ?? 0}%</div>
+                <div className="font-bold text-slate-900">
+                  {project.progress ?? 0}%
+                </div>
               </div>
               <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden hidden sm:block">
                 <div
-                  className={cn('h-full rounded-full', getProgressColor(project.progress ?? 0))}
+                  className={cn(
+                    'h-full rounded-full',
+                    getProgressColor(project.progress ?? 0),
+                  )}
                   style={{ width: `${project.progress ?? 0}%` }}
                 />
               </div>
@@ -267,7 +288,9 @@ export default function ProjectDetailPage() {
                 ) : (
                   <Copy className="h-4 w-4" />
                 )}
-                <span className="hidden sm:inline">{isCloning || cloneMutation.isPending ? '복제 중...' : '복제'}</span>
+                <span className="hidden sm:inline">
+                  {isCloning || cloneMutation.isPending ? '복제 중...' : '복제'}
+                </span>
               </button>
             </div>
           </div>
@@ -283,7 +306,9 @@ export default function ProjectDetailPage() {
               <nav className="space-y-1">
                 {project.stages?.map((stage) => {
                   const isActive = stage.id === activeStageId;
-                  const completedTasks = (stage.tasks || []).filter((t) => t.status === 'completed').length;
+                  const completedTasks = (stage.tasks || []).filter(
+                    (t) => t.status === 'completed',
+                  ).length;
 
                   return (
                     <button
@@ -292,7 +317,9 @@ export default function ProjectDetailPage() {
                       onClick={() => handleStageClick(stage.id)}
                       className={cn(
                         'w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors',
-                        isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50',
+                        isActive
+                          ? 'bg-blue-50 text-blue-700'
+                          : 'text-slate-600 hover:bg-slate-50',
                       )}
                     >
                       <div className="flex items-center gap-2">
@@ -303,7 +330,9 @@ export default function ProjectDetailPage() {
                         ) : (
                           <Circle className="h-4 w-4 text-slate-300" />
                         )}
-                        <span className="text-sm font-medium">{stage.template?.name || '단계'}</span>
+                        <span className="text-sm font-medium">
+                          {stage.template?.name || '단계'}
+                        </span>
                       </div>
                       <span className="text-xs text-slate-500">
                         {completedTasks}/{stage.tasks?.length || 0}
@@ -320,8 +349,12 @@ export default function ProjectDetailPage() {
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold text-slate-900">{activeStage?.template?.name || '태스크 목록'}</h3>
-                  <p className="text-sm text-slate-500">전체 {taskCounts.total}개 · 완료 {taskCounts.completed}개</p>
+                  <h3 className="font-semibold text-slate-900">
+                    {activeStage?.template?.name || '태스크 목록'}
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    전체 {taskCounts.total}개 · 완료 {taskCounts.completed}개
+                  </p>
                 </div>
               </div>
               <div className="divide-y divide-slate-100">
@@ -357,13 +390,17 @@ export default function ProjectDetailPage() {
                             <span
                               className={cn(
                                 'font-medium',
-                                task.status === 'completed' ? 'text-slate-500 line-through' : 'text-slate-900',
+                                task.status === 'completed'
+                                  ? 'text-slate-500 line-through'
+                                  : 'text-slate-900',
                               )}
                             >
                               {task.title}
                             </span>
                             {task.isMandatory && (
-                              <span className="px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded">필수</span>
+                              <span className="px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded">
+                                필수
+                              </span>
                             )}
                           </div>
                           <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
@@ -373,7 +410,9 @@ export default function ProjectDetailPage() {
                                 {new Date(task.dueDate).toLocaleDateString('ko-KR')}
                               </span>
                             )}
-                            {task.assignee?.name && <span>담당: {task.assignee.name}</span>}
+                            {task.assignee?.name && (
+                              <span>담당: {task.assignee.name}</span>
+                            )}
                           </div>
                         </div>
 
@@ -390,7 +429,10 @@ export default function ProjectDetailPage() {
                         {/* 상태 배지 */}
                         {statusConfig && (
                           <span
-                            className={cn('px-2.5 py-1 text-xs font-medium rounded-full', statusConfig.color)}
+                            className={cn(
+                              'px-2.5 py-1 text-xs font-medium rounded-full',
+                              statusConfig.color,
+                            )}
                           >
                             {statusConfig.label}
                           </span>
@@ -401,7 +443,9 @@ export default function ProjectDetailPage() {
                     );
                   })
                 ) : (
-                  <div className="px-5 py-8 text-center text-slate-500">선택된 단계에 태스크가 없습니다.</div>
+                  <div className="px-5 py-8 text-center text-slate-500">
+                    선 택된 단계에 태스크가 없습니다.
+                  </div>
                 )}
               </div>
             </div>
@@ -417,12 +461,16 @@ export default function ProjectDetailPage() {
                     const userName = log.user?.name || '알 수 없음';
                     const taskTitle = log.task?.title || '작업';
                     const userInitial = userName.charAt(0).toUpperCase();
-                    const createdLabel = log.createdAt ? formatRelativeTime(log.createdAt) : '방금 전';
+                    const createdLabel = log.createdAt
+                      ? formatRelativeTime(log.createdAt)
+                      : '방금 전';
 
                     return (
                       <div key={log.id} className="flex gap-3">
                         <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs font-medium text-slate-600">{userInitial}</span>
+                          <span className="text-xs font-medium text-slate-600">
+                            {userInitial}
+                          </span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-slate-900">
@@ -430,8 +478,14 @@ export default function ProjectDetailPage() {
                             <span className="text-slate-500">님이 </span>
                             <span className="font-medium">{taskTitle}</span>
                           </p>
-                          {log.comment && <p className="text-sm text-slate-600 mt-0.5">{log.comment}</p>}
-                          <p className="text-xs text-slate-400 mt-1">{createdLabel}</p>
+                          {log.comment && (
+                            <p className="text-sm text-slate-600 mt-0.5">
+                              {log.comment}
+                            </p>
+                          )}
+                          <p className="text-xs text-slate-400 mt-1">
+                            {createdLabel}
+                          </p>
                         </div>
                       </div>
                     );
