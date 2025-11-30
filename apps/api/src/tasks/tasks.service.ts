@@ -1,5 +1,5 @@
 // apps/api/src/tasks/tasks.service.ts
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, TaskStatus } from './dto/task.dto';
 
@@ -7,10 +7,46 @@ import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, TaskStatus } from '.
 export class TasksService {
   constructor(private prisma: PrismaService) {}
 
+  // NOTE: 회사/사용자 컨텍스트가 없을 때도 동작하도록 기본값을 보장
+  private async resolveCompanyId(optionalCompanyId?: string): Promise<string> {
+    if (optionalCompanyId) return optionalCompanyId;
+
+    let company = await this.prisma.company.findFirst();
+
+    if (!company) {
+      company = await this.prisma.company.create({
+        data: { name: 'Demo Company' },
+      });
+    }
+
+    return company.id;
+  }
+
+  private async resolveUserId(optionalUserId?: string): Promise<string> {
+    if (optionalUserId) return optionalUserId;
+
+    const companyId = await this.resolveCompanyId();
+
+    let user = await this.prisma.user.findFirst({ where: { companyId } });
+
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          email: 'dev-user@example.com',
+          name: 'Local Dev User',
+          companyId,
+        },
+      });
+    }
+
+    return user.id;
+  }
+
   /**
    * 태스크 생성
    */
-  async create(dto: CreateTaskDto, userId: string) {
+  async create(dto: CreateTaskDto, userId?: string) {
+    const resolvedUserId = await this.resolveUserId(userId);
     const task = await this.prisma.task.create({
       data: {
         title: dto.title,
@@ -23,7 +59,7 @@ export class TasksService {
     });
 
     // 활동 로그 기록 (MVP #30)
-    await this.createHistory(task.id, userId, 'created', null, 'created');
+    await this.createHistory(task.id, resolvedUserId, 'created', null, 'created');
 
     return task;
   }
@@ -76,7 +112,8 @@ export class TasksService {
   /**
    * 태스크 수정
    */
-  async update(id: string, dto: UpdateTaskDto, userId: string) {
+  async update(id: string, dto: UpdateTaskDto, userId?: string) {
+    const resolvedUserId = await this.resolveUserId(userId);
     const existing = await this.findOne(id);
     const changes: string[] = [];
 
@@ -100,7 +137,7 @@ export class TasksService {
 
     // 변경 내역이 있으면 히스토리 기록
     if (changes.length > 0) {
-      await this.createHistory(id, userId, 'updated', null, null, changes.join(', '));
+      await this.createHistory(id, resolvedUserId, 'updated', null, null, changes.join(', '));
     }
 
     return task;
@@ -110,7 +147,8 @@ export class TasksService {
    * 태스크 상태 변경 + 히스토리 자동 기록 (MVP #30)
    * 설계서 핵심 기능
    */
-  async updateStatus(id: string, dto: UpdateTaskStatusDto, userId: string) {
+  async updateStatus(id: string, dto: UpdateTaskStatusDto, userId?: string) {
+    const resolvedUserId = await this.resolveUserId(userId);
     const existing = await this.findOne(id);
     const oldStatus = existing.status;
 
@@ -128,7 +166,7 @@ export class TasksService {
     // MVP #30: 활동 로그 자동 기록
     await this.createHistory(
       id,
-      userId,
+      resolvedUserId,
       'status_changed',
       oldStatus,
       dto.status,
@@ -141,7 +179,8 @@ export class TasksService {
   /**
    * 태스크 삭제
    */
-  async remove(id: string, userId: string) {
+  async remove(id: string, userId?: string) {
+    await this.resolveUserId(userId);
     await this.findOne(id);
     return this.prisma.task.delete({ where: { id } });
   }
