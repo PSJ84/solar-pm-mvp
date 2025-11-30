@@ -36,7 +36,7 @@ export function TodayWidget({ tasks, upcoming7Days = [] }: TodayWidgetProps) {
           </div>
         </div>
         <Link
-          href="/dashboard/today"
+          href="/tasks"
           className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
         >
           전체 보기
@@ -118,7 +118,7 @@ export function TodayWidget({ tasks, upcoming7Days = [] }: TodayWidgetProps) {
       {tasks.length > 5 && (
         <div className="px-5 py-3 bg-slate-50 text-center">
           <Link
-            href="/dashboard/today"
+            href="/tasks"
             className="text-sm text-blue-600 hover:text-blue-700"
           >
             +{tasks.length - 5}건 더 보기

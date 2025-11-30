@@ -21,8 +21,43 @@ import {
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn, STATUS_LABELS, formatRelativeTime, getProgressColor } from '@/lib/utils';
-import { projectsApi, tasksApi } from '@/lib/api';
-import type { Project, Task, TaskHistory, TaskStatus } from '@/types';
+import { projectsApi, stagesApi, tasksApi } from '@/lib/api';
+import type { Project, ProjectStage, Task, TaskHistory, TaskStatus } from '@/types';
+
+type DerivedStage = ProjectStage & { derivedStatus: string };
+
+type StageDateField = 'startDate' | 'receivedDate' | 'completedDate';
+
+const deriveStageStatus = (stage: ProjectStage): string => {
+  const tasks = stage.tasks || [];
+
+  if (tasks.length > 0) {
+    const completedCount = tasks.filter((t) => t.status === 'completed').length;
+    const hasInProgress = tasks.some((t) => t.status === 'in_progress');
+
+    if (completedCount === tasks.length) return 'completed';
+    if (hasInProgress || completedCount > 0) return 'active';
+    return 'pending';
+  }
+
+  return stage.status;
+};
+
+const calculateTaskStats = (stages?: ProjectStage[] | DerivedStage[]) => {
+  const allTasks = stages?.flatMap((s) => s.tasks || []) || [];
+  const completedTasks = allTasks.filter((task) => task.status === 'completed');
+  const totalTasks = allTasks.length;
+  const progress = totalTasks > 0 ? Math.round((completedTasks.length / totalTasks) * 100) : 0;
+
+  return { totalTasks, completedTasks: completedTasks.length, progress };
+};
+
+const normalizeDateInput = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+};
 
 export default function ProjectDetailPage() {
   const router = useRouter();
@@ -34,6 +69,11 @@ export default function ProjectDetailPage() {
   const queryClient = useQueryClient();
   const [activeStageId, setActiveStageId] = useState<string | null>(null);
   const [isCloning, setIsCloning] = useState(false);
+  const [stageDates, setStageDates] = useState<Record<StageDateField, string>>({
+    startDate: '',
+    receivedDate: '',
+    completedDate: '',
+  });
 
   const projectQueryKey = useMemo(() => ['project', projectId], [projectId]);
   const activityQueryKey = useMemo(
@@ -61,6 +101,25 @@ export default function ProjectDetailPage() {
     staleTime: 15 * 1000,
   });
 
+  const projectWithDerived = useMemo(() => {
+    if (!project) return null;
+
+    const stagesWithDerived: DerivedStage[] = (project.stages || []).map((stage) => ({
+      ...stage,
+      derivedStatus: deriveStageStatus(stage),
+    }));
+
+    const stats = calculateTaskStats(stagesWithDerived);
+
+    return {
+      ...project,
+      stages: stagesWithDerived,
+      totalTasks: project.totalTasks ?? stats.totalTasks,
+      completedTasks: project.completedTasks ?? stats.completedTasks,
+      progress: project.progress ?? stats.progress,
+    };
+  }, [project]);
+
   const { data: activityLog } = useQuery<TaskHistory[]>({
     queryKey: activityQueryKey,
     queryFn: async () => {
@@ -80,30 +139,33 @@ export default function ProjectDetailPage() {
       const previousProject = queryClient.getQueryData<Project>(projectQueryKey);
 
       if (previousProject) {
-        const updatedStages = previousProject.stages?.map((stage) => ({
-          ...stage,
-          tasks: stage.tasks?.map((task) =>
+        const updatedStages = previousProject.stages?.map((stage) => {
+          const updatedTasks = stage.tasks?.map((task) =>
             task.id === taskId
               ? {
                   ...task,
                   status: nextStatus,
                 }
               : task,
-          ),
-        }));
+          );
 
-        const allTasks = updatedStages?.flatMap((s) => s.tasks || []) || [];
-        const completedTasks = allTasks.filter((task) => task.status === 'completed');
+          const derivedStatus = deriveStageStatus({ ...stage, tasks: updatedTasks || [] });
+
+          return {
+            ...stage,
+            tasks: updatedTasks || [],
+            status: derivedStatus,
+          };
+        });
+
+        const stats = calculateTaskStats(updatedStages);
 
         queryClient.setQueryData<Project>(projectQueryKey, {
           ...previousProject,
           stages: updatedStages || [],
-          totalTasks: allTasks.length,
-          completedTasks: completedTasks.length,
-          progress:
-            allTasks.length > 0
-              ? Math.round((completedTasks.length / allTasks.length) * 100)
-              : 0,
+          totalTasks: stats.totalTasks,
+          completedTasks: stats.completedTasks,
+          progress: stats.progress,
         });
       }
 
@@ -123,6 +185,42 @@ export default function ProjectDetailPage() {
     },
   });
 
+  const { mutate: saveStageDates, isPending: isSavingStageDates } = useMutation({
+    mutationFn: async ({
+      stageId,
+      payload,
+    }: {
+      stageId: string;
+      payload: Partial<Record<StageDateField, string | null>>;
+    }) => {
+      const response = await stagesApi.updateDates(stageId, payload);
+      return response.data;
+    },
+    onSuccess: (updatedStage) => {
+      queryClient.setQueryData<Project>(projectQueryKey, (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          stages:
+            prev.stages?.map((stage) =>
+              stage.id === updatedStage.id
+                ? {
+                    ...stage,
+                    ...updatedStage,
+                  }
+                : stage,
+            ) || [],
+        };
+      });
+    },
+    onError: () => {
+      alert('단계 일정을 저장하는 중 오류가 발생했습니다.');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: projectQueryKey });
+    },
+  });
+
   const cloneMutation = useMutation({
     mutationFn: async () => {
       const response = await projectsApi.clone(projectId);
@@ -139,35 +237,43 @@ export default function ProjectDetailPage() {
   });
 
   useEffect(() => {
-    if (project?.stages?.length) {
+    if (projectWithDerived?.stages?.length) {
       setActiveStageId((prev) => {
-        if (prev && project.stages.some((stage) => stage.id === prev)) {
+        if (prev && projectWithDerived.stages.some((stage) => stage.id === prev)) {
           return prev;
         }
-        return project.stages[0].id;
+        return projectWithDerived.stages[0].id;
       });
     }
-  }, [project]);
+  }, [projectWithDerived?.stages]);
 
-  const activeStage = useMemo(
-    () => project?.stages?.find((s) => s.id === activeStageId) || project?.stages?.[0],
-    [activeStageId, project?.stages],
-  );
+  const activeStage = useMemo(() => {
+    return projectWithDerived?.stages?.find((s) => s.id === activeStageId) ||
+      projectWithDerived?.stages?.[0];
+  }, [activeStageId, projectWithDerived?.stages]);
 
   const activeTasks: Task[] = useMemo(
     () => activeStage?.tasks || [],
     [activeStage?.tasks],
   );
 
+  useEffect(() => {
+    if (activeStage) {
+      setStageDates({
+        startDate: normalizeDateInput(activeStage.startDate),
+        receivedDate: normalizeDateInput(activeStage.receivedDate),
+        completedDate: normalizeDateInput(activeStage.completedDate),
+      });
+    }
+  }, [activeStage]);
+
   const taskCounts = useMemo(() => {
-    const allTasks = project?.stages?.flatMap((s) => s.tasks || []) || [];
+    const stats = calculateTaskStats(projectWithDerived?.stages);
     return {
-      total: project?.totalTasks || allTasks.length,
-      completed:
-        project?.completedTasks ||
-        allTasks.filter((task) => task.status === 'completed').length,
+      total: projectWithDerived?.totalTasks ?? stats.totalTasks,
+      completed: projectWithDerived?.completedTasks ?? stats.completedTasks,
     };
-  }, [project]);
+  }, [projectWithDerived]);
 
   const handleStageClick = (stageId: string) => {
     setActiveStageId(stageId);
@@ -183,7 +289,7 @@ export default function ProjectDetailPage() {
     if (!projectId || isCloning) return;
     setIsCloning(true);
     const confirmed = window.confirm(
-      `"${project?.name || '프로젝트'}" 프로젝트를 복제하시겠습니까?\n\n` +
+      `"${projectWithDerived?.name || '프로젝트'}" 프로젝트를 복제하시겠습니까?\n\n` +
         `- 단계와 태스크 구조가 복제됩니다.\n` +
         `- 문서와 사진은 복제되지 않습니다.\n` +
         `- 마감일은 초기화됩니다.`,
@@ -197,7 +303,24 @@ export default function ProjectDetailPage() {
     cloneMutation.mutate();
   };
 
-  const isLoading = isProjectLoading && !project;
+  const handleDateChange = (field: StageDateField, value: string) => {
+    setStageDates((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveDates = () => {
+    if (!activeStage?.id) return;
+
+    saveStageDates({
+      stageId: activeStage.id,
+      payload: {
+        startDate: stageDates.startDate || null,
+        receivedDate: stageDates.receivedDate || null,
+        completedDate: stageDates.completedDate || null,
+      },
+    });
+  };
+
+  const isLoading = isProjectLoading && !projectWithDerived;
 
   if (isLoading) {
     return (
@@ -207,7 +330,7 @@ export default function ProjectDetailPage() {
     );
   }
 
-  if (!hasProjectId || isProjectError || !project) {
+  if (!hasProjectId || isProjectError || !projectWithDerived) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="bg-white border border-slate-200 rounded-xl p-8 text-center space-y-3">
@@ -238,18 +361,18 @@ export default function ProjectDetailPage() {
                 <ArrowLeft className="h-5 w-5 text-slate-600" />
               </Link>
               <div>
-                <h1 className="text-xl font-bold text-slate-900">{project.name}</h1>
+                <h1 className="text-xl font-bold text-slate-900">{projectWithDerived.name}</h1>
                 <div className="flex items-center gap-3 text-sm text-slate-500 mt-0.5">
-                  {project.address && (
+                  {projectWithDerived.address && (
                     <span className="flex items-center gap-1">
                       <MapPin className="h-3.5 w-3.5" />
-                      {project.address}
+                      {projectWithDerived.address}
                     </span>
                   )}
-                  {project.capacityKw && (
+                  {projectWithDerived.capacityKw && (
                     <span className="flex items-center gap-1">
                       <Zap className="h-3.5 w-3.5 text-yellow-500" />
-                      {project.capacityKw} kW
+                      {projectWithDerived.capacityKw} kW
                     </span>
                   )}
                 </div>
@@ -260,16 +383,16 @@ export default function ProjectDetailPage() {
               <div className="text-right hidden sm:block">
                 <div className="text-sm text-slate-600">진행률</div>
                 <div className="font-bold text-slate-900">
-                  {project.progress ?? 0}%
+                  {projectWithDerived.progress ?? 0}%
                 </div>
               </div>
               <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden hidden sm:block">
                 <div
                   className={cn(
                     'h-full rounded-full',
-                    getProgressColor(project.progress ?? 0),
+                    getProgressColor(projectWithDerived.progress ?? 0),
                   )}
-                  style={{ width: `${project.progress ?? 0}%` }}
+                  style={{ width: `${projectWithDerived.progress ?? 0}%` }}
                 />
               </div>
               {/* 공유 버튼 */}
@@ -304,11 +427,12 @@ export default function ProjectDetailPage() {
             <div className="bg-white rounded-xl border border-slate-200 p-4 sticky top-28">
               <h3 className="font-semibold text-slate-900 mb-3">프로젝트 단계</h3>
               <nav className="space-y-1">
-                {project.stages?.map((stage) => {
+                {projectWithDerived.stages?.map((stage) => {
                   const isActive = stage.id === activeStageId;
                   const completedTasks = (stage.tasks || []).filter(
                     (t) => t.status === 'completed',
                   ).length;
+                  const statusForIcon = (stage as DerivedStage).derivedStatus || stage.status;
 
                   return (
                     <button
@@ -323,9 +447,9 @@ export default function ProjectDetailPage() {
                       )}
                     >
                       <div className="flex items-center gap-2">
-                        {stage.status === 'completed' ? (
+                        {statusForIcon === 'completed' ? (
                           <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        ) : stage.status === 'active' ? (
+                        ) : statusForIcon === 'active' ? (
                           <Clock className="h-4 w-4 text-blue-500" />
                         ) : (
                           <Circle className="h-4 w-4 text-slate-300" />
@@ -357,6 +481,39 @@ export default function ProjectDetailPage() {
                   </p>
                 </div>
               </div>
+
+              <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {(['startDate', 'receivedDate', 'completedDate'] as StageDateField[]).map((field) => (
+                    <label key={field} className="flex flex-col gap-2 text-sm text-slate-700">
+                      <span>
+                        {field === 'startDate'
+                          ? '시작일'
+                          : field === 'receivedDate'
+                          ? '접수일'
+                          : '완료일'}
+                      </span>
+                      <input
+                        type="date"
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={stageDates[field]}
+                        onChange={(e) => handleDateChange(field, e.target.value)}
+                      />
+                    </label>
+                  ))}
+                </div>
+                <div className="flex justify-end mt-3">
+                  <button
+                    type="button"
+                    onClick={handleSaveDates}
+                    disabled={isSavingStageDates}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isSavingStageDates ? '저장 중...' : '저장'}
+                  </button>
+                </div>
+              </div>
+
               <div className="divide-y divide-slate-100">
                 {activeTasks.length ? (
                   activeTasks.map((task) => {

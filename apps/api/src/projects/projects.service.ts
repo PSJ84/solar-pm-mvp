@@ -247,18 +247,75 @@ export class ProjectsService {
     sourceProjectId: string,
     companyId?: string,
   ): Promise<{ id: string; name: string }> {
-    // NOTE: companyId 없이도 복제할 수 있도록 source는 전체에서 조회
-    const source = await this.findOne(sourceProjectId);
+    const source = await this.prisma.project.findFirst({
+      where: { id: sourceProjectId, deletedAt: null },
+      include: {
+        stages: {
+          where: { deletedAt: null },
+          include: {
+            template: true,
+            tasks: { where: { deletedAt: null } },
+          },
+          orderBy: { template: { order: 'asc' } },
+        },
+      },
+    });
+
+    if (!source) {
+      throw new NotFoundException('프로젝트를 찾을 수 없습니다.');
+    }
+
     const resolvedCompanyId = await this.resolveCompanyId(companyId);
 
-    const cloned = await this.prisma.project.create({
-      data: {
-        name: `${source.name} (복제)`,
-        address: source.address,
-        capacityKw: source.capacityKw,
-        status: 'active',
-        companyId: resolvedCompanyId,
-      },
+    const cloned = await this.prisma.$transaction(async (tx) => {
+      const newProject = await tx.project.create({
+        data: {
+          name: `${source.name} (복제)`,
+          address: source.address,
+          capacityKw: source.capacityKw,
+          status: 'active',
+          targetDate: source.targetDate,
+          permitNumber: source.permitNumber,
+          inspectionDate: source.inspectionDate,
+          constructionStartAt: source.constructionStartAt,
+          externalId: source.externalId,
+          tags: source.tags || [],
+          companyId: resolvedCompanyId,
+        },
+      });
+
+      for (const stage of source.stages) {
+        const clonedStage = await tx.projectStage.create({
+          data: {
+            projectId: newProject.id,
+            templateId: stage.templateId,
+            status: 'pending',
+            startedAt: null,
+            completedAt: null,
+            startDate: null,
+            receivedDate: null,
+            completedDate: null,
+          },
+        });
+
+        for (const task of stage.tasks) {
+          await tx.task.create({
+            data: {
+              title: task.title,
+              description: task.description,
+              isMandatory: task.isMandatory,
+              dueDate: null,
+              status: 'pending',
+              assigneeId: null,
+              projectStageId: clonedStage.id,
+              templateId: task.templateId,
+              tags: task.tags || [],
+            },
+          });
+        }
+      }
+
+      return newProject;
     });
 
     return cloned;

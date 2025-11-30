@@ -132,6 +132,14 @@ export const tasksApi = {
   delete: (id: string) => api.delete(`/tasks/${id}`),
 };
 
+// Stages
+export const stagesApi = {
+  updateDates: (
+    id: string,
+    data: { startDate?: string | null; receivedDate?: string | null; completedDate?: string | null },
+  ) => api.patch(`/stages/${id}/dates`, data),
+};
+
 // Share Links
 export const shareLinksApi = {
   create: (data: any) => api.post('/share-links', data),

@@ -29,12 +29,16 @@ export type ProjectStatus = 'planning' | 'in_progress' | 'completed' | 'on_hold'
 export interface ProjectStage {
   id: string;
   status: string;
+  startDate?: string | null;
+  receivedDate?: string | null;
+  completedDate?: string | null;
   template: {
     id: string;
     name: string;
     order: number;
   };
   tasks: Task[];
+  derivedStatus?: string;
 }
 
 export interface Task {
