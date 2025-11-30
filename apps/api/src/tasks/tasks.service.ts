@@ -173,6 +173,8 @@ export class TasksService {
       dto.comment || `상태 변경: ${this.getStatusLabel(oldStatus)} → ${this.getStatusLabel(dto.status)}`,
     );
 
+    await this.updateStageStatus(existing.projectStageId);
+
     return task;
   }
 
@@ -219,5 +221,40 @@ export class TasksService {
       delayed: '지연',
     };
     return labels[status] || status;
+  }
+
+  /**
+   * 태스크 상태에 따라 단계 상태도 갱신
+   */
+  private async updateStageStatus(projectStageId: string) {
+    const stage = await this.prisma.projectStage.findUnique({
+      where: { id: projectStageId },
+      include: { tasks: { where: { deletedAt: null } } },
+    });
+
+    if (!stage) return;
+
+    const tasks = stage.tasks || [];
+    let derivedStatus = stage.status;
+
+    if (tasks.length > 0) {
+      const completedCount = tasks.filter((t) => t.status === 'completed').length;
+      const hasInProgress = tasks.some((t) => t.status === 'in_progress');
+
+      if (completedCount === tasks.length) {
+        derivedStatus = 'completed';
+      } else if (hasInProgress || completedCount > 0) {
+        derivedStatus = 'active';
+      } else {
+        derivedStatus = 'pending';
+      }
+    }
+
+    if (derivedStatus !== stage.status) {
+      await this.prisma.projectStage.update({
+        where: { id: projectStageId },
+        data: { status: derivedStatus },
+      });
+    }
   }
 }

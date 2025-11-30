@@ -1,8 +1,19 @@
 // apps/web/app/projects/page.tsx
-import Link from 'next/link';
-import { redirect } from 'next/navigation';
+'use client';
 
-// 프로젝트 목록은 대시보드에 통합되어 있으므로 리다이렉트
+import { ProjectList } from '@/components/dashboard/ProjectList';
+import { AppShell } from '@/components/layout/AppShell';
+
 export default function ProjectsPage() {
-  redirect('/dashboard');
+  return (
+    <AppShell>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">프로젝트</h1>
+          <p className="text-slate-600 mt-1">프로젝트 전체 목록을 확인하세요.</p>
+        </div>
+        <ProjectList />
+      </div>
+    </AppShell>
+  );
 }

@@ -9,6 +9,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { ShareLinksModule } from './share-links/share-links.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { StagesModule } from './stages/stages.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     ShareLinksModule,
     NotificationsModule,
     DashboardModule,
+    StagesModule,
   ],
 })
 export class AppModule {}
