@@ -27,8 +27,13 @@ import type { Project, Task, TaskHistory, TaskStatus } from '@/types';
 
 export default function ProjectDetailPage() {
   const router = useRouter();
-  const params = useParams<{ id?: string }>();
-  const id = params?.id ? String(params.id) : '';
+  const params = useParams<{ id?: string | string[] }>();
+  const idValue = params?.id;
+  const id = Array.isArray(idValue) ? idValue[0] : idValue ? String(idValue) : '';
+
+  if (!id) {
+    return null;
+  }
 
   const projectQueryKey = ['project', id];
   const activityQueryKey = ['project', id, 'activity-log'];
