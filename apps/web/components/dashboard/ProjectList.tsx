@@ -3,45 +3,20 @@
 
 import Link from 'next/link';
 import { MapPin, Zap, ChevronRight, Plus } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { cn, STATUS_LABELS, getProgressColor } from '@/lib/utils';
 import type { Project } from '@/types';
-
-// MVP: Mock 데이터 (실제로는 React Query 사용)
-const mockProjects: Project[] = [
-  {
-    id: 'p1',
-    name: '충남 서산 태양광 발전소',
-    address: '충청남도 서산시 운산면',
-    capacityKw: 998.5,
-    status: 'in_progress',
-    progress: 45,
-    createdAt: '2024-01-15',
-    updatedAt: '2024-11-20',
-  },
-  {
-    id: 'p2',
-    name: '전북 익산 태양광 발전소',
-    address: '전라북도 익산시 용안면',
-    capacityKw: 1500,
-    status: 'in_progress',
-    progress: 72,
-    createdAt: '2024-02-01',
-    updatedAt: '2024-11-19',
-  },
-  {
-    id: 'p3',
-    name: '경북 영천 태양광 발전소',
-    address: '경상북도 영천시 화남면',
-    capacityKw: 500,
-    status: 'planning',
-    progress: 15,
-    createdAt: '2024-03-10',
-    updatedAt: '2024-11-18',
-  },
-];
+import { projectsApi } from '@/lib/api';
 
 export function ProjectList() {
-  const projects = mockProjects;
+  const { data: projects, isLoading, isError } = useQuery<Project[]>({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      const res = await projectsApi.getAll();
+      return res.data;
+    },
+    staleTime: 30 * 1000,
+  });
 
   return (
     <div className="space-y-4">
@@ -54,12 +29,31 @@ export function ProjectList() {
         <span className="font-medium">새 프로젝트 만들기</span>
       </Link>
 
-      {/* 프로젝트 카드 목록 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {projects.map((project) => (
-          <ProjectCard key={project.id} project={project} />
-        ))}
-      </div>
+      {/* 상태 영역 */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <div
+              key={idx}
+              className="bg-white rounded-xl border border-slate-200 p-5 animate-pulse h-40"
+            />
+          ))}
+        </div>
+      ) : isError ? (
+        <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg p-4">
+          프로젝트 목록을 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.
+        </div>
+      ) : !projects || projects.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-xl p-6 text-center text-slate-600">
+          아직 프로젝트가 없습니다. 상단의 "새 프로젝트 만들기" 버튼으로 프로젝트를 추가해 보세요.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {projects.map((project) => (
+            <ProjectCard key={project.id} project={project} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -78,19 +72,23 @@ function ProjectCard({ project }: { project: Project }) {
           <h3 className="font-semibold text-slate-900 truncate group-hover:text-blue-600 transition-colors">
             {project.name}
           </h3>
-          <div className="flex items-center gap-1 text-sm text-slate-500 mt-1">
-            <MapPin className="h-3.5 w-3.5" />
-            <span className="truncate">{project.address}</span>
-          </div>
-        </div>
-        <span
-          className={cn(
-            'px-2 py-1 text-xs font-medium rounded-full flex-shrink-0',
-            statusConfig.color
+          {project.address && (
+            <div className="flex items-center gap-1 text-sm text-slate-500 mt-1">
+              <MapPin className="h-3.5 w-3.5" />
+              <span className="truncate">{project.address}</span>
+            </div>
           )}
-        >
-          {statusConfig.label}
-        </span>
+        </div>
+        {statusConfig && (
+          <span
+            className={cn(
+              'px-2 py-1 text-xs font-medium rounded-full flex-shrink-0',
+              statusConfig.color
+            )}
+          >
+            {statusConfig.label}
+          </span>
+        )}
       </div>
 
       {/* 용량 */}
