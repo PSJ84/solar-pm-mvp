@@ -46,8 +46,12 @@ export class ProjectsController {
 
   @Get(':id')
   @ApiOperation({ summary: '프로젝트 상세 조회 (단계, 태스크 포함)' })
-  async findOne(@Param('id') id: string, @Req() req: any) {
-    return this.projectsService.findOne(id, req.user.companyId);
+  async findOne(@Param('id') id: string, @Req() req: Request) {
+    // NOTE: user가 없을 수 있으므로 companyId를 안전하게 추출
+    const user: any = (req as any).user;
+    const companyId = user?.companyId;
+
+    return this.projectsService.findOne(id, companyId);
   }
 
   @Patch(':id')
@@ -55,15 +59,23 @@ export class ProjectsController {
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateProjectDto,
-    @Req() req: any,
+    @Req() req: Request,
   ) {
-    return this.projectsService.update(id, dto, req.user.companyId);
+    // NOTE: req.user가 없을 수 있으므로 companyId 접근을 방어적으로 처리
+    const user: any = (req as any).user;
+    const companyId = user?.companyId;
+
+    return this.projectsService.update(id, dto, companyId);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: '프로젝트 삭제 (Soft delete)' })
-  async remove(@Param('id') id: string, @Req() req: any) {
-    return this.projectsService.remove(id, req.user.companyId);
+  async remove(@Param('id') id: string, @Req() req: Request) {
+    // NOTE: 인증 없이도 동작하도록 companyId 추출 시 null-safe 처리
+    const user: any = (req as any).user;
+    const companyId = user?.companyId;
+
+    return this.projectsService.remove(id, companyId);
   }
 
   /**
@@ -92,8 +104,12 @@ export class ProjectsController {
   async getActivityLog(
     @Param('id') id: string,
     @Query('limit') limit: number,
-    @Req() req: any,
+    @Req() req: Request,
   ) {
-    return this.projectsService.getActivityLog(id, req.user.companyId, limit || 20);
+    // NOTE: user가 없을 때도 에러가 나지 않도록 companyId를 optional하게 추출
+    const user: any = (req as any).user;
+    const companyId = user?.companyId;
+
+    return this.projectsService.getActivityLog(id, companyId, limit || 20);
   }
 }
