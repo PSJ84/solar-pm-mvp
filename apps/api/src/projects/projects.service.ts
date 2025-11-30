@@ -1,17 +1,34 @@
 // apps/api/src/projects/projects.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateProjectDto, UpdateProjectDto, CloneProjectDto } from './dto/project.dto';
+import { CreateProjectDto, UpdateProjectDto } from './dto/project.dto';
 
 @Injectable()
 export class ProjectsService {
   constructor(private prisma: PrismaService) {}
 
+  // NOTE: 인증이 없을 때에도 동작하도록 companyId를 안전하게 해석
+  private async resolveCompanyId(optionalCompanyId?: string): Promise<string> {
+    if (optionalCompanyId) return optionalCompanyId;
+
+    let company = await this.prisma.company.findFirst();
+
+    if (!company) {
+      company = await this.prisma.company.create({
+        data: { name: 'Demo Company' },
+      });
+    }
+
+    return company.id;
+  }
+
   /**
    * 프로젝트 생성 (MVP #1)
    * - 회사의 기본 단계 템플릿을 자동으로 적용
    */
-  async create(dto: CreateProjectDto, companyId: string) {
+  async create(dto: CreateProjectDto, companyId?: string) {
+    const resolvedCompanyId = await this.resolveCompanyId(companyId);
+
     // 1. 프로젝트 생성
     const project = await this.prisma.project.create({
       data: {
@@ -25,13 +42,13 @@ export class ProjectsService {
         constructionStartAt: dto.constructionStartAt ? new Date(dto.constructionStartAt) : null,
         externalId: dto.externalId,
         tags: dto.tags || [],
-        companyId,
+        companyId: resolvedCompanyId,
       },
     });
 
     // 2. 회사의 단계 템플릿 조회
     const stageTemplates = await this.prisma.stageTemplate.findMany({
-      where: { companyId, deletedAt: null },
+      where: { companyId: resolvedCompanyId, deletedAt: null },
       include: { taskTemplates: { where: { deletedAt: null } } },
       orderBy: { order: 'asc' },
     });
@@ -66,15 +83,19 @@ export class ProjectsService {
       }
     }
 
-    return this.findOne(project.id, companyId);
+    return this.findOne(project.id, resolvedCompanyId);
   }
 
   /**
    * 회사별 프로젝트 목록 조회
    */
-  async findAll(companyId: string) {
+  async findAll(companyId?: string) {
+    const where = companyId
+      ? { companyId, deletedAt: null }
+      : { deletedAt: null };
+
     const projects = await this.prisma.project.findMany({
-      where: { companyId, deletedAt: null },
+      where,
       include: {
         stages: {
           where: { deletedAt: null },
@@ -122,9 +143,14 @@ export class ProjectsService {
   /**
    * 프로젝트 상세 조회
    */
-  async findOne(id: string, companyId: string) {
+  async findOne(id: string, companyId?: string) {
+    const where: any = { id, deletedAt: null };
+    if (companyId) {
+      where.companyId = companyId;
+    }
+
     const project = await this.prisma.project.findFirst({
-      where: { id, companyId, deletedAt: null },
+      where,
       include: {
         stages: {
           where: { deletedAt: null },
@@ -179,7 +205,7 @@ export class ProjectsService {
   /**
    * 프로젝트 수정
    */
-  async update(id: string, dto: UpdateProjectDto, companyId: string) {
+  async update(id: string, dto: UpdateProjectDto, companyId?: string) {
     // 존재 확인
     await this.findOne(id, companyId);
 
@@ -204,7 +230,7 @@ export class ProjectsService {
   /**
    * 프로젝트 삭제 (Soft delete)
    */
-  async remove(id: string, companyId: string) {
+  async remove(id: string, companyId?: string) {
     await this.findOne(id, companyId);
     // [v1.1] Soft delete로 변경
     return this.prisma.project.update({
@@ -214,101 +240,34 @@ export class ProjectsService {
   }
 
   /**
-   * [v1.1] 프로젝트 복제
-   * - Project, ProjectStage, Task를 복제
-   * - Document/Photo/History는 복제하지 않음
+   * [v1.1] 프로젝트 복제 (단순 헤더 복제)
+   * - 인증이 없더라도 사용 가능하도록 companyId를 resolve
    */
   async clone(
-    sourceId: string,
-    companyId: string,
-    dto: CloneProjectDto = {},
+    sourceProjectId: string,
+    companyId?: string,
   ): Promise<{ id: string; name: string }> {
-    // 1. 원본 프로젝트 조회
-    const source = await this.prisma.project.findFirst({
-      where: { id: sourceId, companyId, deletedAt: null },
-      include: {
-        stages: {
-          where: { deletedAt: null },
-          include: {
-            template: true,
-            tasks: {
-              where: { deletedAt: null },
-            },
-          },
-        },
+    // NOTE: companyId 없이도 복제할 수 있도록 source는 전체에서 조회
+    const source = await this.findOne(sourceProjectId);
+    const resolvedCompanyId = await this.resolveCompanyId(companyId);
+
+    const cloned = await this.prisma.project.create({
+      data: {
+        name: `${source.name} (복제)`,
+        address: source.address,
+        capacityKw: source.capacityKw,
+        status: 'active',
+        companyId: resolvedCompanyId,
       },
     });
 
-    if (!source) {
-      throw new NotFoundException('원본 프로젝트를 찾을 수 없습니다.');
-    }
-
-    const copyAssignees = dto.copyAssignees !== false; // 기본값 true
-    const newName = dto.name || `${source.name} (복사본)`;
-
-    // 2. Prisma 트랜잭션으로 복제 실행
-    const result = await this.prisma.$transaction(async (tx) => {
-      // 2-1. 새 프로젝트 생성
-      const newProject = await tx.project.create({
-        data: {
-          name: newName,
-          address: source.address,
-          capacityKw: source.capacityKw,
-          targetDate: null, // 마감일은 초기화
-          status: 'planning',
-          companyId: source.companyId,
-          // [v1.1] 필드들은 원본에서 복사 (일부 초기화)
-          permitNumber: null, // 허가번호는 초기화
-          inspectionDate: null,
-          constructionStartAt: null,
-          externalId: null,
-          tags: source.tags,
-        },
-      });
-
-      // 2-2. 단계 복제
-      for (const stage of source.stages) {
-        const newStage = await tx.projectStage.create({
-          data: {
-            projectId: newProject.id,
-            templateId: stage.templateId,
-            status: 'pending', // 상태 초기화
-            startedAt: null,
-            completedAt: null,
-          },
-        });
-
-        // 2-3. 태스크 복제
-        for (const task of stage.tasks) {
-          await tx.task.create({
-            data: {
-              title: task.title,
-              description: task.description,
-              dueDate: null, // 마감일 초기화
-              status: 'pending', // 상태 초기화
-              isMandatory: task.isMandatory,
-              assigneeId: copyAssignees ? task.assigneeId : null,
-              projectStageId: newStage.id,
-              templateId: task.templateId,
-              tags: task.tags,
-            },
-          });
-        }
-      }
-
-      return newProject;
-    });
-
-    return {
-      id: result.id,
-      name: result.name,
-    };
+    return cloned;
   }
 
   /**
    * 프로젝트 최근 활동 로그 조회 (MVP #30)
    */
-  async getActivityLog(projectId: string, companyId: string, limit = 20) {
+  async getActivityLog(projectId: string, companyId?: string, limit = 20) {
     await this.findOne(projectId, companyId);
 
     const histories = await this.prisma.taskHistory.findMany({
