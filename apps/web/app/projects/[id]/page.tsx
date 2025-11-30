@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Share2,
@@ -20,52 +20,135 @@ import {
   Copy,
   Loader2,
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn, STATUS_LABELS, formatRelativeTime, getProgressColor } from '@/lib/utils';
-import { projectsApi } from '@/lib/api';
-import type { Project, TaskHistory } from '@/types';
+import { projectsApi, tasksApi } from '@/lib/api';
+import type { Project, Task, TaskHistory, TaskStatus } from '@/types';
 
-export default function ProjectDetailPage({ params }: { params: { id: string } }) {
+export default function ProjectDetailPage() {
   const router = useRouter();
+  const params = useParams<{ id?: string | string[] }>();
+  const idValue = params?.id;
+  const id = Array.isArray(idValue) ? idValue[0] : idValue ? String(idValue) : '';
+
+  if (!id) {
+    return null;
+  }
+
+  const projectQueryKey = ['project', id];
+  const activityQueryKey = ['project', id, 'activity-log'];
+
+  const queryClient = useQueryClient();
   const [activeStage, setActiveStage] = useState<string | null>(null);
   const [isCloning, setIsCloning] = useState(false);
 
-  const {
-    data: project,
-    isLoading,
-    isError,
-  } = useQuery<Project>({
-    queryKey: ['project', params.id],
+  const resolveNextStatus = (status: TaskStatus): TaskStatus => {
+    if (status === 'pending') return 'in_progress';
+    if (status === 'in_progress') return 'completed';
+    return 'pending';
+  };
+
+  const { data: project, isLoading, isError } = useQuery<Project>({
+    queryKey: projectQueryKey,
     queryFn: async () => {
-      const res = await projectsApi.getOne(params.id);
+      const res = await projectsApi.getOne(id);
       return res.data;
     },
+    enabled: Boolean(id),
     staleTime: 15 * 1000,
   });
 
   const { data: activityLog } = useQuery<TaskHistory[]>({
-    queryKey: ['project', params.id, 'activity-log'],
+    queryKey: activityQueryKey,
     queryFn: async () => {
-      const res = await projectsApi.getActivityLog(params.id);
+      const res = await projectsApi.getActivityLog(id);
       return res.data;
     },
-    enabled: !!project,
+    enabled: Boolean(id),
     staleTime: 15 * 1000,
   });
 
+  const { mutate: updateTaskStatus, isPending: isUpdatingTask } = useMutation({
+    mutationFn: async ({ taskId, nextStatus }: { taskId: string; nextStatus: TaskStatus }) => {
+      await tasksApi.updateStatus(taskId, nextStatus);
+    },
+    onMutate: async ({ taskId, nextStatus }) => {
+      await queryClient.cancelQueries({ queryKey: projectQueryKey });
+      const previousProject = queryClient.getQueryData<Project>(projectQueryKey);
+
+      if (previousProject) {
+        const updatedStages = previousProject.stages?.map((stage) => ({
+          ...stage,
+          tasks: stage.tasks?.map((task) =>
+            task.id === taskId
+              ? {
+                  ...task,
+                  status: nextStatus,
+                }
+              : task,
+          ),
+        }));
+
+        // 진행률/카운트 재계산
+        const allTasks = updatedStages?.flatMap((s) => s.tasks || []) || [];
+        const completedTasks = allTasks.filter((task) => task.status === 'completed');
+
+        queryClient.setQueryData<Project>(projectQueryKey, {
+          ...previousProject,
+          stages: updatedStages || [],
+          totalTasks: allTasks.length,
+          completedTasks: completedTasks.length,
+          progress: allTasks.length > 0 ? Math.round((completedTasks.length / allTasks.length) * 100) : 0,
+        });
+      }
+
+      return { previousProject };
+    },
+    onError: (error: any, _vars, context) => {
+      if (context?.previousProject) {
+        queryClient.setQueryData(projectQueryKey, context.previousProject);
+      }
+      const message = error?.response?.data?.message || '태스크 상태 변경에 실패했습니다.';
+      // eslint-disable-next-line no-alert
+      alert(message);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: projectQueryKey });
+      queryClient.invalidateQueries({ queryKey: activityQueryKey });
+    },
+  });
+
   useEffect(() => {
-    if (project?.stages?.length && !activeStage) {
-      setActiveStage(project.stages[0].id);
+    if (project?.stages?.length) {
+      setActiveStage((prev) => {
+        if (prev && project.stages?.some((stage) => stage.id === prev)) return prev;
+        return project.stages[0].id;
+      });
     }
-  }, [project, activeStage]);
+  }, [project]);
 
   const activeStageData = useMemo(
-    () => project?.stages?.find((s) => s.id === activeStage),
+    () => project?.stages?.find((s) => s.id === activeStage) || project?.stages?.[0],
     [activeStage, project?.stages],
   );
 
+  const activeTasks: Task[] = useMemo(
+    () => activeStageData?.tasks || [],
+    [activeStageData?.tasks],
+  );
+
+  const handleStageClick = (stageId: string) => {
+    setActiveStage(stageId);
+  };
+
+  const handleStatusToggle = (task: Task) => {
+    if (!task?.id || isUpdatingTask) return;
+    const nextStatus = resolveNextStatus(task.status);
+    updateTaskStatus({ taskId: task.id, nextStatus });
+  };
+
   const handleCloneProject = async () => {
-    if (!project || isCloning) return;
+    if (!project || !id || isCloning) return;
 
     const confirmed = window.confirm(
       `"${project.name}" 프로젝트를 복제하시겠습니까?\n\n` +
@@ -78,7 +161,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 
     setIsCloning(true);
     try {
-      const response = await projectsApi.clone(params.id);
+      const response = await projectsApi.clone(id);
       alert(`프로젝트가 복제되었습니다!\n새 프로젝트: ${response.data.name}`);
       router.push(`/projects/${response.data.id}`);
     } catch (error: any) {
@@ -113,13 +196,14 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
     );
   }
 
-  const taskCounts = {
-    total: project.totalTasks || project.stages?.flatMap((s) => s.tasks || []).length || 0,
-    completed:
-      project.completedTasks ||
-      project.stages?.flatMap((s) => s.tasks || []).filter((t) => t.status === 'completed').length ||
-        0,
-  };
+  const taskCounts = useMemo(() => {
+    const allTasks = project.stages?.flatMap((s) => s.tasks || []) || [];
+    return {
+      total: project.totalTasks || allTasks.length,
+      completed:
+        project.completedTasks || allTasks.filter((task) => task.status === 'completed').length,
+    };
+  }, [project]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -156,12 +240,12 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
               {/* 진행률 */}
               <div className="text-right hidden sm:block">
                 <div className="text-sm text-slate-600">진행률</div>
-                <div className="font-bold text-slate-900">{project.progress}%</div>
+                <div className="font-bold text-slate-900">{project.progress ?? 0}%</div>
               </div>
               <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden hidden sm:block">
                 <div
-                  className={cn('h-full rounded-full', getProgressColor(project.progress))}
-                  style={{ width: `${project.progress}%` }}
+                  className={cn('h-full rounded-full', getProgressColor(project.progress ?? 0))}
+                  style={{ width: `${project.progress ?? 0}%` }}
                 />
               </div>
               {/* 공유 버튼 */}
@@ -201,7 +285,8 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                   return (
                     <button
                       key={stage.id}
-                      onClick={() => setActiveStage(stage.id)}
+                      type="button"
+                      onClick={() => handleStageClick(stage.id)}
                       className={cn(
                         'w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors',
                         isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50',
@@ -215,7 +300,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                         ) : (
                           <Circle className="h-4 w-4 text-slate-300" />
                         )}
-                        <span className="text-sm font-medium">{stage.template?.name}</span>
+                        <span className="text-sm font-medium">{stage.template?.name || '단계'}</span>
                       </div>
                       <span className="text-xs text-slate-500">
                         {completedTasks}/{stage.tasks?.length || 0}
@@ -239,8 +324,8 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                 </div>
               </div>
               <div className="divide-y divide-slate-100">
-                {activeStageData?.tasks?.length ? (
-                  activeStageData.tasks.map((task) => {
+                {activeTasks.length ? (
+                  activeTasks.map((task) => {
                     const statusConfig = STATUS_LABELS[task.status];
 
                     return (
@@ -249,7 +334,13 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                         className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors"
                       >
                         {/* 상태 체크박스/아이콘 */}
-                        <div className="flex-shrink-0">
+                        <button
+                          type="button"
+                          disabled={isUpdatingTask}
+                          onClick={() => handleStatusToggle(task)}
+                          className="flex-shrink-0 disabled:opacity-60"
+                          aria-label="태스크 상태 변경"
+                        >
                           {task.status === 'completed' ? (
                             <CheckCircle2 className="h-5 w-5 text-green-500" />
                           ) : task.status === 'in_progress' ? (
@@ -257,7 +348,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                           ) : (
                             <Circle className="h-5 w-5 text-slate-300" />
                           )}
-                        </div>
+                        </button>
 
                         {/* 태스크 정보 */}
                         <div className="flex-1 min-w-0">
@@ -328,28 +419,33 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
               <h3 className="font-semibold text-slate-900 mb-4">최근 활동</h3>
               <div className="space-y-4">
                 {activityLog?.length ? (
-                  activityLog.map((log) => (
-                    <div key={log.id} className="flex gap-3">
-                      <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-medium text-slate-600">
-                          {log.user.name[0]}
-                        </span>
+                  activityLog.map((log) => {
+                    const userName = log.user?.name || '알 수 없음';
+                    const taskTitle = log.task?.title || '작업';
+                    const userInitial = userName.charAt(0).toUpperCase();
+                    const createdLabel = log.createdAt
+                      ? formatRelativeTime(log.createdAt)
+                      : '방금 전';
+
+                    return (
+                      <div key={log.id} className="flex gap-3">
+                        <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-medium text-slate-600">{userInitial}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-slate-900">
+                            <span className="font-medium">{userName}</span>
+                            <span className="text-slate-500">님이 </span>
+                            <span className="font-medium">{taskTitle}</span>
+                          </p>
+                          {log.comment && (
+                            <p className="text-sm text-slate-600 mt-0.5">{log.comment}</p>
+                          )}
+                          <p className="text-xs text-slate-400 mt-1">{createdLabel}</p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-900">
-                          <span className="font-medium">{log.user.name}</span>
-                          <span className="text-slate-500">님이 </span>
-                          <span className="font-medium">{log.task.title}</span>
-                        </p>
-                        {log.comment && (
-                          <p className="text-sm text-slate-600 mt-0.5">{log.comment}</p>
-                        )}
-                        <p className="text-xs text-slate-400 mt-1">
-                          {formatRelativeTime(log.createdAt)}
-                        </p>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <p className="text-sm text-slate-500">활동 로그가 없습니다.</p>
                 )}
