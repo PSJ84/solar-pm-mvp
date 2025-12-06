@@ -5,7 +5,7 @@ import type {
   TemplateDetailDto,
   TemplateListItemDto,
   StageTemplateStageDto,
-} from '@shared/types/template.types';
+} from '../../../../packages/shared/src/types/template.types';
 
 @Injectable()
 export class TemplatesService {
