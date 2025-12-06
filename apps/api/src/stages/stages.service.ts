@@ -17,6 +17,9 @@ export class StagesService {
   async findOne(id: string) {
     const stage = await this.prisma.projectStage.findFirst({
       where: { id, deletedAt: null },
+      include: {
+        tasks: { where: { deletedAt: null, isActive: true } },
+      },
     });
 
     if (!stage) {

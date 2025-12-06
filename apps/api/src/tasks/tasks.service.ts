@@ -243,7 +243,11 @@ export class TasksService {
   private async updateStageStatus(projectStageId: string) {
     const stage = await this.prisma.projectStage.findUnique({
       where: { id: projectStageId },
-      include: { tasks: { where: { deletedAt: null, isActive: true } } },
+      include: {
+        tasks: {
+          where: { deletedAt: null, isActive: true },
+        },
+      },
     });
 
     if (!stage) return;

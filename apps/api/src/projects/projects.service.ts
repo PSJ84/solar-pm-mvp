@@ -100,9 +100,10 @@ export class ProjectsService {
       where,
       include: {
         stages: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, isActive: true },
           include: {
-            tasks: { where: { deletedAt: null } },
+            template: true,
+            tasks: { where: { deletedAt: null, isActive: true } },
           },
         },
         _count: {
@@ -158,11 +159,11 @@ export class ProjectsService {
       where,
       include: {
         stages: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, isActive: true },
           include: {
             template: true,
             tasks: {
-              where: { deletedAt: null },
+              where: { deletedAt: null, isActive: true },
               include: {
                 assignee: {
                   select: { id: true, name: true, email: true },
@@ -259,10 +260,10 @@ export class ProjectsService {
       where: { id: sourceProjectId, deletedAt: null },
       include: {
         stages: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, isActive: true },
           include: {
             template: true,
-            tasks: { where: { deletedAt: null } },
+            tasks: { where: { deletedAt: null, isActive: true } },
           },
           orderBy: { template: { order: 'asc' } },
         },
@@ -303,6 +304,7 @@ export class ProjectsService {
             startDate: null,
             receivedDate: null,
             completedDate: null,
+            isActive: stage.isActive ?? true,
           },
         });
 
@@ -318,6 +320,7 @@ export class ProjectsService {
               projectStageId: clonedStage.id,
               templateId: task.templateId,
               tags: task.tags || [],
+              isActive: task.isActive ?? true,
             },
           });
         }

@@ -1,9 +1,10 @@
+// packages/shared/src/types/template.types.ts
 export interface StageTemplateTaskDto {
   id?: string;
   name: string;
   description?: string;
   isMandatory: boolean;
-  isDefaultActive?: boolean;  // Codex 추가
+  isDefaultActive?: boolean;
   ownerCategory?: string;
   automationCategory?: string;
   order: number;
@@ -14,7 +15,7 @@ export interface StageTemplateStageDto {
   name: string;
   description?: string;
   isRequired: boolean;
-  isDefaultActive?: boolean; // Codex 추가
+  isDefaultActive?: boolean;
   order: number;
   tasks: StageTemplateTaskDto[];
 }
