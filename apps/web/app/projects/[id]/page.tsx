@@ -18,6 +18,8 @@ import {
   ChevronRight,
   Copy,
   Loader2,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn, STATUS_LABELS, formatRelativeTime, getProgressColor } from '@/lib/utils';
@@ -29,7 +31,9 @@ type DerivedStage = ProjectStage & { derivedStatus: string };
 type StageDateField = 'startDate' | 'receivedDate' | 'completedDate';
 
 const deriveStageStatus = (stage: ProjectStage): string => {
-  const tasks = stage.tasks || [];
+  if (stage.isActive === false) return 'inactive';
+
+  const tasks = (stage.tasks || []).filter((t) => t.isActive !== false);
 
   if (tasks.length > 0) {
     const completedCount = tasks.filter((t) => t.status === 'completed').length;
@@ -40,16 +44,34 @@ const deriveStageStatus = (stage: ProjectStage): string => {
     return 'pending';
   }
 
-  return stage.status;
+  return 'pending';
 };
 
 const calculateTaskStats = (stages?: ProjectStage[] | DerivedStage[]) => {
-  const allTasks = stages?.flatMap((s) => s.tasks || []) || [];
+  const activeStages = stages?.filter((stage) => stage.isActive !== false) || [];
+  const allTasks = activeStages.flatMap((stage) => (stage.tasks || []).filter((task) => task.isActive !== false));
   const completedTasks = allTasks.filter((task) => task.status === 'completed');
   const totalTasks = allTasks.length;
   const progress = totalTasks > 0 ? Math.round((completedTasks.length / totalTasks) * 100) : 0;
 
   return { totalTasks, completedTasks: completedTasks.length, progress };
+};
+
+const recalcProjectData = (project: Project, stages: ProjectStage[] = []) => {
+  const stagesWithDerived: DerivedStage[] = stages.map((stage) => ({
+    ...stage,
+    derivedStatus: deriveStageStatus(stage),
+  }));
+
+  const stats = calculateTaskStats(stagesWithDerived);
+
+  return {
+    ...project,
+    stages: stagesWithDerived,
+    totalTasks: stats.totalTasks,
+    completedTasks: stats.completedTasks,
+    progress: stats.progress,
+  };
 };
 
 const normalizeDateInput = (value?: string | null) => {
@@ -104,20 +126,7 @@ export default function ProjectDetailPage() {
   const projectWithDerived = useMemo(() => {
     if (!project) return null;
 
-    const stagesWithDerived: DerivedStage[] = (project.stages || []).map((stage) => ({
-      ...stage,
-      derivedStatus: deriveStageStatus(stage),
-    }));
-
-    const stats = calculateTaskStats(stagesWithDerived);
-
-    return {
-      ...project,
-      stages: stagesWithDerived,
-      totalTasks: project.totalTasks ?? stats.totalTasks,
-      completedTasks: project.completedTasks ?? stats.completedTasks,
-      progress: project.progress ?? stats.progress,
-    };
+    return recalcProjectData(project, project.stages || []);
   }, [project]);
 
   const { data: activityLog } = useQuery<TaskHistory[]>({
@@ -185,6 +194,86 @@ export default function ProjectDetailPage() {
     },
   });
 
+  const { mutate: toggleStageActive, isPending: isTogglingStage } = useMutation({
+    mutationFn: async ({ stageId, isActive }: { stageId: string; isActive: boolean }) => {
+      await stagesApi.updateActive(stageId, isActive);
+    },
+    onMutate: async ({ stageId, isActive }) => {
+      await queryClient.cancelQueries({ queryKey: projectQueryKey });
+      const previousProject = queryClient.getQueryData<Project>(projectQueryKey);
+
+      if (previousProject) {
+        const updatedStages =
+          previousProject.stages?.map((stage) =>
+            stage.id === stageId
+              ? {
+                  ...stage,
+                  isActive,
+                }
+              : stage,
+          ) || [];
+
+        queryClient.setQueryData<Project>(projectQueryKey, recalcProjectData(previousProject, updatedStages));
+      }
+
+      return { previousProject };
+    },
+    onError: (error: any, _vars, context) => {
+      if (context?.previousProject) {
+        queryClient.setQueryData(projectQueryKey, context.previousProject);
+      }
+      const message = error?.response?.data?.message || '단계를 표시/숨김 처리하는 데 실패했습니다.';
+      alert(message);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: projectQueryKey });
+    },
+  });
+
+  const { mutate: toggleTaskActive, isPending: isTogglingTaskActive } = useMutation({
+    mutationFn: async ({ taskId, isActive }: { taskId: string; isActive: boolean }) => {
+      await tasksApi.updateActive(taskId, isActive);
+    },
+    onMutate: async ({ taskId, isActive }) => {
+      await queryClient.cancelQueries({ queryKey: projectQueryKey });
+      const previousProject = queryClient.getQueryData<Project>(projectQueryKey);
+
+      if (previousProject) {
+        const updatedStages =
+          previousProject.stages?.map((stage) => {
+            const updatedTasks = stage.tasks?.map((task) =>
+              task.id === taskId
+                ? {
+                    ...task,
+                    isActive,
+                  }
+                : task,
+            );
+
+            return {
+              ...stage,
+              tasks: updatedTasks || [],
+            };
+          }) || [];
+
+        queryClient.setQueryData<Project>(projectQueryKey, recalcProjectData(previousProject, updatedStages));
+      }
+
+      return { previousProject };
+    },
+    onError: (error: any, _vars, context) => {
+      if (context?.previousProject) {
+        queryClient.setQueryData(projectQueryKey, context.previousProject);
+      }
+      const message = error?.response?.data?.message || '업무를 표시/숨김 처리하는 데 실패했습니다.';
+      alert(message);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: projectQueryKey });
+      queryClient.invalidateQueries({ queryKey: activityQueryKey });
+    },
+  });
+
   const { mutate: saveStageDates, isPending: isSavingStageDates } = useMutation({
     mutationFn: async ({
       stageId,
@@ -199,18 +288,17 @@ export default function ProjectDetailPage() {
     onSuccess: (updatedStage) => {
       queryClient.setQueryData<Project>(projectQueryKey, (prev) => {
         if (!prev) return prev;
-        return {
-          ...prev,
-          stages:
-            prev.stages?.map((stage) =>
-              stage.id === updatedStage.id
-                ? {
-                    ...stage,
-                    ...updatedStage,
-                  }
-                : stage,
-            ) || [],
-        };
+        const updatedStages =
+          prev.stages?.map((stage) =>
+            stage.id === updatedStage.id
+              ? {
+                  ...stage,
+                  ...updatedStage,
+                }
+              : stage,
+          ) || [];
+
+        return recalcProjectData(prev, updatedStages);
       });
     },
     onError: () => {
@@ -268,19 +356,27 @@ export default function ProjectDetailPage() {
   }, [activeStage]);
 
   const taskCounts = useMemo(() => {
-    const stats = calculateTaskStats(projectWithDerived?.stages);
     return {
-      total: projectWithDerived?.totalTasks ?? stats.totalTasks,
-      completed: projectWithDerived?.completedTasks ?? stats.completedTasks,
+      total: projectWithDerived?.totalTasks ?? 0,
+      completed: projectWithDerived?.completedTasks ?? 0,
     };
-  }, [projectWithDerived]);
+  }, [projectWithDerived?.totalTasks, projectWithDerived?.completedTasks]);
 
   const handleStageClick = (stageId: string) => {
     setActiveStageId(stageId);
   };
 
+  const handleStageActiveToggle = (stageId: string, currentActive?: boolean) => {
+    toggleStageActive({ stageId, isActive: !(currentActive !== false) });
+  };
+
+  const handleTaskActiveToggle = (task: Task) => {
+    if (!task?.id || isTogglingTaskActive) return;
+    toggleTaskActive({ taskId: task.id, isActive: !(task.isActive !== false) });
+  };
+
   const handleStatusToggle = (task: Task) => {
-    if (!task?.id || isUpdatingTask) return;
+    if (!task?.id || isUpdatingTask || task.isActive === false) return;
     const nextStatus = resolveNextStatus(task.status);
     updateTaskStatus({ taskId: task.id, nextStatus });
   };
@@ -429,39 +525,53 @@ export default function ProjectDetailPage() {
               <nav className="space-y-1">
                 {projectWithDerived.stages?.map((stage) => {
                   const isActive = stage.id === activeStageId;
-                  const completedTasks = (stage.tasks || []).filter(
-                    (t) => t.status === 'completed',
-                  ).length;
+                  const stageIsVisible = stage.isActive !== false;
+                  const activeStageTasks = (stage.tasks || []).filter((t) => t.isActive !== false);
+                  const completedTasks = activeStageTasks.filter((t) => t.status === 'completed').length;
+                  const totalTasks = activeStageTasks.length;
                   const statusForIcon = (stage as DerivedStage).derivedStatus || stage.status;
 
                   return (
-                    <button
-                      key={stage.id}
-                      type="button"
-                      onClick={() => handleStageClick(stage.id)}
-                      className={cn(
-                        'w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors',
-                        isActive
-                          ? 'bg-blue-50 text-blue-700'
-                          : 'text-slate-600 hover:bg-slate-50',
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        {statusForIcon === 'completed' ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        ) : statusForIcon === 'active' ? (
-                          <Clock className="h-4 w-4 text-blue-500" />
-                        ) : (
-                          <Circle className="h-4 w-4 text-slate-300" />
+                    <div key={stage.id} className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleStageClick(stage.id)}
+                        className={cn(
+                          'w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors flex-1',
+                          isActive
+                            ? 'bg-blue-50 text-blue-700'
+                            : 'text-slate-600 hover:bg-slate-50',
+                          !stageIsVisible && 'opacity-70 line-through',
                         )}
-                        <span className="text-sm font-medium">
-                          {stage.template?.name || '단계'}
+                      >
+                        <div className="flex items-center gap-2">
+                          {statusForIcon === 'completed' ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          ) : statusForIcon === 'active' ? (
+                            <Clock className="h-4 w-4 text-blue-500" />
+                          ) : statusForIcon === 'inactive' ? (
+                            <EyeOff className="h-4 w-4 text-slate-400" />
+                          ) : (
+                            <Circle className="h-4 w-4 text-slate-300" />
+                          )}
+                          <span className="text-sm font-medium">
+                            {stage.template?.name || '단계'}
+                          </span>
+                        </div>
+                        <span className="text-xs text-slate-500">
+                          {completedTasks}/{totalTasks}
                         </span>
-                      </div>
-                      <span className="text-xs text-slate-500">
-                        {completedTasks}/{stage.tasks?.length || 0}
-                      </span>
-                    </button>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleStageActiveToggle(stage.id, stage.isActive)}
+                        disabled={isTogglingStage}
+                        className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg disabled:opacity-50"
+                        aria-label={`단계 ${stage.template?.name || ''} ${stageIsVisible ? '숨기기' : '표시하기'}`}
+                      >
+                        {stageIsVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                      </button>
+                    </div>
                   );
                 })}
               </nav>
@@ -518,16 +628,20 @@ export default function ProjectDetailPage() {
                 {activeTasks.length ? (
                   activeTasks.map((task) => {
                     const statusConfig = STATUS_LABELS[task.status];
+                    const isTaskActive = task.isActive !== false;
 
                     return (
                       <div
                         key={task.id}
-                        className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors"
+                        className={cn(
+                          'flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors',
+                          !isTaskActive && 'opacity-70',
+                        )}
                       >
                         {/* 상태 체크박스/아이콘 */}
                         <button
                           type="button"
-                          disabled={isUpdatingTask}
+                          disabled={isUpdatingTask || !isTaskActive}
                           onClick={() => handleStatusToggle(task)}
                           className="flex-shrink-0 disabled:opacity-60"
                           aria-label="태스크 상태 변경"
@@ -554,6 +668,11 @@ export default function ProjectDetailPage() {
                             >
                               {task.title}
                             </span>
+                            {!isTaskActive && (
+                              <span className="px-1.5 py-0.5 text-xs bg-slate-100 text-slate-600 rounded">
+                                숨김
+                              </span>
+                            )}
                             {task.isMandatory && (
                               <span className="px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded">
                                 필수
@@ -580,6 +699,19 @@ export default function ProjectDetailPage() {
                           </button>
                           <button className="p-1.5 hover:bg-slate-100 rounded">
                             <FileText className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            className="p-1.5 hover:bg-slate-100 rounded"
+                            onClick={() => handleTaskActiveToggle(task)}
+                            disabled={isTogglingTaskActive}
+                            aria-label={`업무 ${task.title} ${isTaskActive ? '숨기기' : '표시하기'}`}
+                          >
+                            {isTaskActive ? (
+                              <Eye className="h-4 w-4" />
+                            ) : (
+                              <EyeOff className="h-4 w-4" />
+                            )}
                           </button>
                         </div>
 

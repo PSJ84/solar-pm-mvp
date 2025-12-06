@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { TasksService } from './tasks.service';
-import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto } from './dto/task.dto';
+import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, UpdateTaskActiveDto } from './dto/task.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Tasks')
@@ -55,6 +55,15 @@ export class TasksController {
   ) {
     const user = (req as any).user;
     return this.tasksService.updateStatus(id, dto, user?.sub);
+  }
+
+  @Patch(':id/active')
+  @ApiOperation({ summary: '태스크 활성/비활성 토글' })
+  async updateActive(
+    @Param('id') id: string,
+    @Body() dto: UpdateTaskActiveDto,
+  ) {
+    return this.tasksService.updateActive(id, dto.isActive);
   }
 
   @Delete(':id')

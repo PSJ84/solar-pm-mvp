@@ -4,6 +4,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { StagesService } from './stages.service';
 import { UpdateStageDatesDto } from './dto/update-stage-dates.dto';
+import { UpdateStageActiveDto } from './dto/update-stage-active.dto';
 
 @ApiTags('Stages')
 @ApiBearerAuth()
@@ -20,5 +21,14 @@ export class StagesController {
     @Req() _req: any,
   ) {
     return this.stagesService.updateDates(id, dto);
+  }
+
+  @Patch(':id/active')
+  @ApiOperation({ summary: '프로젝트 단계 활성/비활성 토글' })
+  async updateActive(
+    @Param('id') id: string,
+    @Body() dto: UpdateStageActiveDto,
+  ) {
+    return this.stagesService.updateActive(id, dto);
   }
 }
