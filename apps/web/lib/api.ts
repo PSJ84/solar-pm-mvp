@@ -129,6 +129,8 @@ export const tasksApi = {
   update: (id: string, data: any) => api.patch(`/tasks/${id}`, data),
   updateStatus: (id: string, status: string, comment?: string) =>
     api.patch(`/tasks/${id}/status`, { status, comment }),
+  updateActive: (id: string, isActive: boolean) =>
+    api.patch(`/tasks/${id}/active`, { isActive }),
   delete: (id: string) => api.delete(`/tasks/${id}`),
 };
 
@@ -138,6 +140,8 @@ export const stagesApi = {
     id: string,
     data: { startDate?: string | null; receivedDate?: string | null; completedDate?: string | null },
   ) => api.patch(`/stages/${id}/dates`, data),
+  updateActive: (id: string, isActive: boolean) =>
+    api.patch(`/stages/${id}/active`, { isActive }),
 };
 
 // Share Links

@@ -60,6 +60,7 @@ export class ProjectsService {
           projectId: project.id,
           templateId: template.id,
           status: 'pending',
+          isActive: template.isDefaultActive ?? true,
         },
       });
 
@@ -75,6 +76,7 @@ export class ProjectsService {
           data: {
             title: taskTemplate.title,
             isMandatory: taskTemplate.isMandatory,
+            isActive: taskTemplate.isDefaultActive ?? true,
             dueDate,
             projectStageId: projectStage.id,
             templateId: taskTemplate.id,
@@ -98,9 +100,10 @@ export class ProjectsService {
       where,
       include: {
         stages: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, isActive: true },
           include: {
-            tasks: { where: { deletedAt: null } },
+            template: true,
+            tasks: { where: { deletedAt: null, isActive: true } },
           },
         },
         _count: {
@@ -115,10 +118,13 @@ export class ProjectsService {
 
     // 진행률 계산 추가
     return projects.map((project) => {
-      const allTasks = project.stages.flatMap((s) => s.tasks);
+      const activeStages = project.stages.filter((s) => s.isActive !== false);
+      const allTasks = activeStages.flatMap((s) =>
+        (s.tasks || []).filter((t) => t.isActive !== false),
+      );
       const completedTasks = allTasks.filter((t) => t.status === 'completed');
-      const progress = allTasks.length > 0 
-        ? Math.round((completedTasks.length / allTasks.length) * 100) 
+      const progress = allTasks.length > 0
+        ? Math.round((completedTasks.length / allTasks.length) * 100)
         : 0;
 
       return {
@@ -153,11 +159,11 @@ export class ProjectsService {
       where,
       include: {
         stages: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, isActive: true },
           include: {
             template: true,
             tasks: {
-              where: { deletedAt: null },
+              where: { deletedAt: null, isActive: true },
               include: {
                 assignee: {
                   select: { id: true, name: true, email: true },
@@ -187,11 +193,14 @@ export class ProjectsService {
       throw new NotFoundException('프로젝트를 찾을 수 없습니다.');
     }
 
-    // 진행률 계산
-    const allTasks = project.stages.flatMap((s) => s.tasks);
+    // 진행률 계산 (비활성 단계/태스크 제외)
+    const activeStages = project.stages.filter((s) => s.isActive !== false);
+    const allTasks = activeStages.flatMap((s) =>
+      (s.tasks || []).filter((t) => t.isActive !== false),
+    );
     const completedTasks = allTasks.filter((t) => t.status === 'completed');
-    const progress = allTasks.length > 0 
-      ? Math.round((completedTasks.length / allTasks.length) * 100) 
+    const progress = allTasks.length > 0
+      ? Math.round((completedTasks.length / allTasks.length) * 100)
       : 0;
 
     return {
@@ -251,10 +260,10 @@ export class ProjectsService {
       where: { id: sourceProjectId, deletedAt: null },
       include: {
         stages: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, isActive: true },
           include: {
             template: true,
-            tasks: { where: { deletedAt: null } },
+            tasks: { where: { deletedAt: null, isActive: true } },
           },
           orderBy: { template: { order: 'asc' } },
         },
@@ -295,6 +304,7 @@ export class ProjectsService {
             startDate: null,
             receivedDate: null,
             completedDate: null,
+            isActive: stage.isActive ?? true,
           },
         });
 
@@ -310,6 +320,7 @@ export class ProjectsService {
               projectStageId: clonedStage.id,
               templateId: task.templateId,
               tags: task.tags || [],
+              isActive: task.isActive ?? true,
             },
           });
         }

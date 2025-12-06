@@ -29,6 +29,7 @@ export type ProjectStatus = 'planning' | 'in_progress' | 'completed' | 'on_hold'
 export interface ProjectStage {
   id: string;
   status: string;
+  isActive?: boolean;
   startDate?: string | null;
   receivedDate?: string | null;
   completedDate?: string | null;
@@ -47,6 +48,7 @@ export interface Task {
   description?: string;
   dueDate?: string;
   status: TaskStatus;
+  isActive?: boolean;
   isMandatory: boolean;
   assignee?: {
     id: string;
