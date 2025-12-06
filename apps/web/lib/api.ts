@@ -111,7 +111,10 @@ export const dashboardApi = {
 // Projects
 export const projectsApi = {
   getAll: () => api.get('/projects'),
-  getOne: (id: string) => api.get(`/projects/${id}`),
+  getOne: (id: string, options?: { includeInactive?: boolean }) => {
+    const query = options?.includeInactive ? '?includeInactive=true' : '';
+    return api.get(`/projects/${id}${query}`);
+  },
   create: (data: any) => api.post('/projects', data),
   update: (id: string, data: any) => api.patch(`/projects/${id}`, data),
   delete: (id: string) => api.delete(`/projects/${id}`),

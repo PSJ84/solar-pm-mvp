@@ -46,12 +46,19 @@ export class ProjectsController {
 
   @Get(':id')
   @ApiOperation({ summary: '프로젝트 상세 조회 (단계, 태스크 포함)' })
-  async findOne(@Param('id') id: string, @Req() req: Request) {
+  @ApiQuery({ name: 'includeInactive', required: false, type: Boolean })
+  async findOne(
+    @Param('id') id: string,
+    @Query('includeInactive') includeInactive: string,
+    @Req() req: Request,
+  ) {
     // NOTE: user가 없을 수 있으므로 companyId를 안전하게 추출
     const user: any = (req as any).user;
     const companyId = user?.companyId;
 
-    return this.projectsService.findOne(id, companyId);
+    const includeInactiveFlag = includeInactive === 'true';
+
+    return this.projectsService.findOne(id, companyId, includeInactiveFlag);
   }
 
   @Patch(':id')
