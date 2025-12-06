@@ -1,9 +1,9 @@
-// apps/api/src/templates/templates.controller.ts
-import { Controller, Get, Param, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TemplatesService } from './templates.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { Request } from 'express';
+import type { ProjectStageTemplateDto } from '@shared/types/template.types';
 
 @ApiTags('Templates')
 @ApiBearerAuth()
@@ -28,5 +28,18 @@ export class TemplatesController {
     const companyId = user?.companyId;
 
     return this.templatesService.findOne(id, companyId);
+  }
+
+  @Patch(':id/structure')
+  @ApiOperation({ summary: '체크리스트 템플릿 구조 업데이트' })
+  async updateStructure(
+    @Param('id') id: string,
+    @Body() payload: ProjectStageTemplateDto,
+    @Req() req: Request,
+  ) {
+    const user: any = (req as any).user;
+    const companyId = user?.companyId;
+
+    return this.templatesService.updateStructure(id, payload, companyId);
   }
 }
