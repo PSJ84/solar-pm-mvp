@@ -34,6 +34,11 @@ export class CreateTaskDto {
   @IsBoolean()
   isMandatory?: boolean;
 
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
   @ApiProperty({ description: '프로젝트 단계 ID' })
   @IsString()
   projectStageId: string;
@@ -59,6 +64,12 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsString()
   assigneeId?: string;
+}
+
+export class UpdateTaskActiveDto {
+  @ApiProperty({ default: true })
+  @IsBoolean()
+  isActive: boolean;
 }
 
 export class UpdateTaskStatusDto {

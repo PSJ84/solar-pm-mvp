@@ -72,6 +72,7 @@ export class DashboardService {
       where: {
         assigneeId: userId || undefined,
         deletedAt: null,
+        isActive: true,
         dueDate: {
           gte: today,
           lt: tomorrow,
@@ -81,6 +82,7 @@ export class DashboardService {
         },
         projectStage: {
           deletedAt: null,
+          isActive: true,
           project: {
             companyId,
             deletedAt: null,
@@ -132,6 +134,7 @@ export class DashboardService {
       where: {
         assigneeId: userId || undefined,
         deletedAt: null,
+        isActive: true,
         dueDate: {
           gte: tomorrow,
           lt: day8,
@@ -141,6 +144,7 @@ export class DashboardService {
         },
         projectStage: {
           deletedAt: null,
+          isActive: true,
           project: {
             companyId,
             deletedAt: null,
@@ -235,10 +239,10 @@ export class DashboardService {
       },
       include: {
         stages: {
-          where: { deletedAt: null },
+          where: { deletedAt: null, isActive: true },
           include: {
             tasks: {
-              where: { deletedAt: null },
+              where: { deletedAt: null, isActive: true },
             },
             template: true,
           },
@@ -250,7 +254,8 @@ export class DashboardService {
     const riskProjects: RiskProjectItem[] = [];
 
     for (const project of projects) {
-      const allTasks = project.stages.flatMap((s) => s.tasks);
+      const activeStages = project.stages.filter((s) => s.isActive !== false);
+      const allTasks = activeStages.flatMap((s) => s.tasks);
       if (allTasks.length === 0) continue;
 
       // 지연된 태스크 계산
@@ -373,7 +378,9 @@ export class DashboardService {
         where: {
           assigneeId: userId,
           deletedAt: null,
+          isActive: true,
           projectStage: {
+            isActive: true,
             project: { companyId, deletedAt: null },
           },
         },
@@ -383,7 +390,9 @@ export class DashboardService {
           assigneeId: userId,
           deletedAt: null,
           status: 'completed',
+          isActive: true,
           projectStage: {
+            isActive: true,
             project: { companyId, deletedAt: null },
           },
         },
@@ -392,9 +401,11 @@ export class DashboardService {
         where: {
           assigneeId: userId,
           deletedAt: null,
+          isActive: true,
           dueDate: { gte: today, lt: tomorrow },
           status: { not: 'completed' },
           projectStage: {
+            isActive: true,
             project: { companyId, deletedAt: null },
           },
         },
@@ -431,6 +442,7 @@ export class DashboardService {
       where: {
         assigneeId: userId || undefined,
         deletedAt: null,
+        isActive: true,
         dueDate: {
           gte: today,
           lt: tomorrow,
@@ -440,6 +452,7 @@ export class DashboardService {
         },
         projectStage: {
           deletedAt: null,
+          isActive: true,
           project: {
             companyId: resolvedCompanyId,
             deletedAt: null,
@@ -492,6 +505,7 @@ export class DashboardService {
       where: {
         assigneeId: userId || undefined,
         deletedAt: null,
+        isActive: true,
         dueDate: {
           gte: today,
           lt: endDate,
@@ -501,6 +515,7 @@ export class DashboardService {
         },
         projectStage: {
           deletedAt: null,
+          isActive: true,
           project: {
             companyId: resolvedCompanyId,
             deletedAt: null,

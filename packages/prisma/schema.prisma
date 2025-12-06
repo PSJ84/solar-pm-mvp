@@ -131,10 +131,11 @@ model Project {
 // ===========================================
 
 model StageTemplate {
-  id          String          @id @default(cuid())
-  name        String          // "발전사업허가", "개발행위허가", "사용전검사" 등
-  description String?
-  order       Int             @default(0)
+  id             String          @id @default(cuid())
+  name           String          // "발전사업허가", "개발행위허가", "사용전검사" 등
+  description    String?
+  order          Int             @default(0)
+  isDefaultActive Boolean        @default(true)
   
   companyId   String
   company     Company         @relation(fields: [companyId], references: [id])
@@ -160,6 +161,7 @@ model TaskTemplate {
   title           String
   description     String?
   isMandatory     Boolean       @default(false) // MVP #20: 착공 전 필수
+  isDefaultActive Boolean       @default(true)
   defaultDueDays  Int?          // 기준일 대비 D-day (예: -14 = 14일 전)
   order           Int           @default(0)
   
@@ -184,6 +186,7 @@ model TaskTemplate {
 model ProjectStage {
   id          String        @id @default(cuid())
   status      String        @default("pending") // pending, active, completed
+  isActive    Boolean       @default(true)
   startedAt      DateTime?
   completedAt    DateTime?
   startDate      DateTime?
@@ -221,7 +224,8 @@ model Task {
   // MVP #6: 오늘 마감 위젯 연동
   dueDate         DateTime?
   status          String        @default("pending") // pending, in_progress, completed, delayed
-  
+  isActive        Boolean       @default(true)
+
   // MVP #20: 착공 강제 조건
   isMandatory     Boolean       @default(false)
   
