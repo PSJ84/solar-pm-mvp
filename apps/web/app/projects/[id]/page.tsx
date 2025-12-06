@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -96,6 +96,10 @@ export default function ProjectDetailPage() {
     receivedDate: '',
     completedDate: '',
   });
+  const [showHiddenStages, setShowHiddenStages] = useState(false);
+  const [showHiddenTasks, setShowHiddenTasks] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type?: 'error' | 'info' | 'success' } | null>(null);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const projectQueryKey = useMemo(() => ['project', projectId], [projectId]);
   const activityQueryKey = useMemo(
@@ -109,6 +113,26 @@ export default function ProjectDetailPage() {
     return 'pending';
   };
 
+  const showToast = (
+    message: string,
+    type: 'error' | 'info' | 'success' = 'info',
+    duration = 3000,
+  ) => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    setToast({ message, type });
+    toastTimeoutRef.current = setTimeout(() => setToast(null), duration);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const {
     data: project,
     isLoading: isProjectLoading,
@@ -116,7 +140,7 @@ export default function ProjectDetailPage() {
   } = useQuery<Project>({
     queryKey: projectQueryKey,
     queryFn: async () => {
-      const res = await projectsApi.getOne(projectId);
+      const res = await projectsApi.getOne(projectId, { includeInactive: true });
       return res.data;
     },
     enabled: hasProjectId,
@@ -128,6 +152,13 @@ export default function ProjectDetailPage() {
 
     return recalcProjectData(project, project.stages || []);
   }, [project]);
+
+  const visibleStages = useMemo(() => {
+    if (!projectWithDerived?.stages) return [] as ProjectStage[];
+    return projectWithDerived.stages.filter(
+      (stage) => showHiddenStages || stage.isActive !== false,
+    );
+  }, [projectWithDerived?.stages, showHiddenStages]);
 
   const { data: activityLog } = useQuery<TaskHistory[]>({
     queryKey: activityQueryKey,
@@ -185,8 +216,7 @@ export default function ProjectDetailPage() {
         queryClient.setQueryData(projectQueryKey, context.previousProject);
       }
       const message = error?.response?.data?.message || '태스크 상태 변경에 실패했습니다.';
-      // eslint-disable-next-line no-alert
-      alert(message);
+      showToast(message, 'error');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: projectQueryKey });
@@ -223,7 +253,7 @@ export default function ProjectDetailPage() {
         queryClient.setQueryData(projectQueryKey, context.previousProject);
       }
       const message = error?.response?.data?.message || '단계를 표시/숨김 처리하는 데 실패했습니다.';
-      alert(message);
+      showToast(message, 'error');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: projectQueryKey });
@@ -266,7 +296,7 @@ export default function ProjectDetailPage() {
         queryClient.setQueryData(projectQueryKey, context.previousProject);
       }
       const message = error?.response?.data?.message || '업무를 표시/숨김 처리하는 데 실패했습니다.';
-      alert(message);
+      showToast(message, 'error');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: projectQueryKey });
@@ -302,7 +332,7 @@ export default function ProjectDetailPage() {
       });
     },
     onError: () => {
-      alert('단계 일정을 저장하는 중 오류가 발생했습니다.');
+      showToast('단계 일정을 저장하는 중 오류가 발생했습니다.', 'error');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: projectQueryKey });
@@ -325,25 +355,26 @@ export default function ProjectDetailPage() {
   });
 
   useEffect(() => {
-    if (projectWithDerived?.stages?.length) {
+    if (visibleStages.length) {
       setActiveStageId((prev) => {
-        if (prev && projectWithDerived.stages.some((stage) => stage.id === prev)) {
+        if (prev && visibleStages.some((stage) => stage.id === prev)) {
           return prev;
         }
-        return projectWithDerived.stages[0].id;
+        return visibleStages[0].id;
       });
+    } else {
+      setActiveStageId(null);
     }
-  }, [projectWithDerived?.stages]);
+  }, [visibleStages]);
 
   const activeStage = useMemo(() => {
-    return projectWithDerived?.stages?.find((s) => s.id === activeStageId) ||
-      projectWithDerived?.stages?.[0];
-  }, [activeStageId, projectWithDerived?.stages]);
+    return visibleStages.find((s) => s.id === activeStageId) || visibleStages[0];
+  }, [activeStageId, visibleStages]);
 
-  const activeTasks: Task[] = useMemo(
-    () => activeStage?.tasks || [],
-    [activeStage?.tasks],
-  );
+  const visibleTasks: Task[] = useMemo(() => {
+    const tasks = activeStage?.tasks || [];
+    return showHiddenTasks ? tasks : tasks.filter((task) => task.isActive !== false);
+  }, [activeStage?.tasks, showHiddenTasks]);
 
   useEffect(() => {
     if (activeStage) {
@@ -352,6 +383,8 @@ export default function ProjectDetailPage() {
         receivedDate: normalizeDateInput(activeStage.receivedDate),
         completedDate: normalizeDateInput(activeStage.completedDate),
       });
+    } else {
+      setStageDates({ startDate: '', receivedDate: '', completedDate: '' });
     }
   }, [activeStage]);
 
@@ -521,9 +554,31 @@ export default function ProjectDetailPage() {
           {/* 좌측: 단계 탭 */}
           <div className="w-64 flex-shrink-0 hidden lg:block">
             <div className="bg-white rounded-xl border border-slate-200 p-4 sticky top-28">
-              <h3 className="font-semibold text-slate-900 mb-3">프로젝트 단계</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-slate-900">프로젝트 단계</h3>
+                <label className="flex items-center gap-2 text-xs text-slate-600">
+                  <span className="whitespace-nowrap">숨김 단계 보기</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowHiddenStages((prev) => !prev)}
+                    className={cn(
+                      'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                      showHiddenStages ? 'bg-blue-600' : 'bg-slate-200',
+                    )}
+                    aria-pressed={showHiddenStages}
+                    aria-label="숨김 단계 보기 토글"
+                  >
+                    <span
+                      className={cn(
+                        'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
+                        showHiddenStages ? 'translate-x-5' : 'translate-x-1',
+                      )}
+                    />
+                  </button>
+                </label>
+              </div>
               <nav className="space-y-1">
-                {projectWithDerived.stages?.map((stage) => {
+                {visibleStages.map((stage) => {
                   const isActive = stage.id === activeStageId;
                   const stageIsVisible = stage.isActive !== false;
                   const activeStageTasks = (stage.tasks || []).filter((t) => t.isActive !== false);
@@ -541,7 +596,7 @@ export default function ProjectDetailPage() {
                           isActive
                             ? 'bg-blue-50 text-blue-700'
                             : 'text-slate-600 hover:bg-slate-50',
-                          !stageIsVisible && 'opacity-70 line-through',
+                          !stageIsVisible && showHiddenStages && 'opacity-60',
                         )}
                       >
                         <div className="flex items-center gap-2">
@@ -557,6 +612,11 @@ export default function ProjectDetailPage() {
                           <span className="text-sm font-medium">
                             {stage.template?.name || '단계'}
                           </span>
+                          {!stageIsVisible && showHiddenStages && (
+                            <span className="px-1.5 py-0.5 text-[10px] bg-slate-100 text-slate-600 rounded-full">
+                              숨김
+                            </span>
+                          )}
                         </div>
                         <span className="text-xs text-slate-500">
                           {completedTasks}/{totalTasks}
@@ -580,17 +640,37 @@ export default function ProjectDetailPage() {
 
           {/* 중앙: 태스크 테이블 */}
           <div className="flex-1 min-w-0">
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-slate-900">
-                    {activeStage?.template?.name || '태스크 목록'}
-                  </h3>
-                  <p className="text-sm text-slate-500">
-                    전체 {taskCounts.total}개 · 완료 {taskCounts.completed}개
-                  </p>
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">
+                      {activeStage?.template?.name || '태스크 목록'}
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      전체 {taskCounts.total}개 · 완료 {taskCounts.completed}개
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-slate-600">
+                    <span className="hidden sm:inline">숨김 태스크 보기</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowHiddenTasks((prev) => !prev)}
+                      className={cn(
+                        'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                        showHiddenTasks ? 'bg-blue-600' : 'bg-slate-200',
+                      )}
+                      aria-pressed={showHiddenTasks}
+                      aria-label="숨김 태스크 보기 토글"
+                    >
+                      <span
+                        className={cn(
+                          'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
+                          showHiddenTasks ? 'translate-x-5' : 'translate-x-1',
+                        )}
+                      />
+                    </button>
+                  </label>
                 </div>
-              </div>
 
               <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
                 <div className="grid gap-4 sm:grid-cols-3">
@@ -625,8 +705,8 @@ export default function ProjectDetailPage() {
               </div>
 
               <div className="divide-y divide-slate-100">
-                {activeTasks.length ? (
-                  activeTasks.map((task) => {
+                {visibleTasks.length ? (
+                  visibleTasks.map((task) => {
                     const statusConfig = STATUS_LABELS[task.status];
                     const isTaskActive = task.isActive !== false;
 
@@ -635,7 +715,7 @@ export default function ProjectDetailPage() {
                         key={task.id}
                         className={cn(
                           'flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors',
-                          !isTaskActive && 'opacity-70',
+                          !isTaskActive && showHiddenTasks && 'opacity-60',
                         )}
                       >
                         {/* 상태 체크박스/아이콘 */}
@@ -668,7 +748,7 @@ export default function ProjectDetailPage() {
                             >
                               {task.title}
                             </span>
-                            {!isTaskActive && (
+                            {!isTaskActive && showHiddenTasks && (
                               <span className="px-1.5 py-0.5 text-xs bg-slate-100 text-slate-600 rounded">
                                 숨김
                               </span>
@@ -790,6 +870,21 @@ export default function ProjectDetailPage() {
           </div>
         </div>
       </main>
+      {toast && (
+        <div
+          role="alert"
+          className={cn(
+            'fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg text-sm z-50',
+            toast.type === 'error'
+              ? 'bg-red-500 text-white'
+              : toast.type === 'success'
+              ? 'bg-green-500 text-white'
+              : 'bg-slate-800 text-white',
+          )}
+        >
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }
