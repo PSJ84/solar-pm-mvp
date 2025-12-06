@@ -1,5 +1,6 @@
 // apps/web/lib/api.ts
 import axios from 'axios';
+import type { TemplateDetailDto, TemplateListItemDto } from '@shared/types/template.types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -111,7 +112,10 @@ export const dashboardApi = {
 // Projects
 export const projectsApi = {
   getAll: () => api.get('/projects'),
-  getOne: (id: string) => api.get(`/projects/${id}`),
+  getOne: (id: string, options?: { includeInactive?: boolean }) => {
+    const query = options?.includeInactive ? '?includeInactive=true' : '';
+    return api.get(`/projects/${id}${query}`);
+  },
   create: (data: any) => api.post('/projects', data),
   update: (id: string, data: any) => api.patch(`/projects/${id}`, data),
   delete: (id: string) => api.delete(`/projects/${id}`),
@@ -142,6 +146,13 @@ export const stagesApi = {
   ) => api.patch(`/stages/${id}/dates`, data),
   updateActive: (id: string, isActive: boolean) =>
     api.patch(`/stages/${id}/active`, { isActive }),
+};
+
+// Templates
+export const templatesApi = {
+  getAll: () => api.get<TemplateListItemDto[]>('/templates'),
+  getOne: (id: string) => api.get<TemplateDetailDto>(`/templates/${id}`),
+  updateStructure: (id: string, data: any) => api.patch<TemplateDetailDto>(`/templates/${id}/structure`, data),
 };
 
 // Share Links

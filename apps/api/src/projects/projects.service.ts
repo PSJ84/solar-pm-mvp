@@ -149,7 +149,7 @@ export class ProjectsService {
   /**
    * 프로젝트 상세 조회
    */
-  async findOne(id: string, companyId?: string) {
+  async findOne(id: string, companyId?: string, includeInactive = false) {
     const where: any = { id, deletedAt: null };
     if (companyId) {
       where.companyId = companyId;
@@ -159,11 +159,15 @@ export class ProjectsService {
       where,
       include: {
         stages: {
-          where: { deletedAt: null, isActive: true },
+          where: includeInactive
+            ? { deletedAt: null }
+            : { deletedAt: null, isActive: true },
           include: {
             template: true,
             tasks: {
-              where: { deletedAt: null, isActive: true },
+              where: includeInactive
+                ? { deletedAt: null }
+                : { deletedAt: null, isActive: true },
               include: {
                 assignee: {
                   select: { id: true, name: true, email: true },
