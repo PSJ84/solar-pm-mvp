@@ -60,6 +60,7 @@ export function ProjectList() {
 
 function ProjectCard({ project }: { project: Project }) {
   const statusConfig = STATUS_LABELS[project.status];
+  const formattedUpdatedAt = formatKoreanDate(project.updatedAt || project.createdAt);
 
   return (
     <Link
@@ -119,10 +120,23 @@ function ProjectCard({ project }: { project: Project }) {
       {/* 하단 */}
       <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-100">
         <span className="text-xs text-slate-500">
-          최근 수정: {new Date(project.updatedAt).toLocaleDateString('ko-KR')}
+          최근 수정: {formattedUpdatedAt}
         </span>
         <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
       </div>
     </Link>
   );
+}
+
+function formatKoreanDate(dateString?: string) {
+  if (!dateString) return '-';
+
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return '-';
+
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+
+  return `${year}. ${month}. ${day}.`;
 }
