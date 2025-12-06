@@ -149,14 +149,23 @@ export default function TemplateDetailPage() {
   };
 
   const normalizedStages = useMemo(
-    () =>
-      stages.map((stage, stageIndex) => ({
-        ...stage,
-        order: stageIndex,
-        tasks: stage.tasks.map((task, taskIndex) => ({ ...task, order: taskIndex })),
+  () =>
+    stages.map((stage, stageIndex) => ({
+      ...stage,
+      order: stageIndex,
+      tasks: stage.tasks.map((task, taskIndex) => ({
+        ...task,
+        // 프론트에서 새로 만든 임시 태스크 id(`temp-...`)는
+        // 서버로 보낼 때 제거해서 "새 태스크"로 인식시키기
+        id:
+          typeof task.id === 'string' && task.id.startsWith('temp-')
+            ? undefined
+            : task.id,
+        order: taskIndex,
       })),
-    [stages],
-  );
+    })),
+  [stages],
+);
 
   const { mutate: saveTemplate, isPending: isSaving } = useMutation({
     mutationFn: async () => {

@@ -6,7 +6,7 @@ import type {
   StageTemplateStageDto,
   StageTemplateTaskDto,
   ProjectStageTemplateDto,
-} from '@shared/types/template.types';
+} from '../../../../packages/shared/src/types/template.types';
 import type { StageTemplate, TaskTemplate } from '@prisma/client';
 
 @Injectable()

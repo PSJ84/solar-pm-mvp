@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TemplatesService } from './templates.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { Request } from 'express';
-import type { ProjectStageTemplateDto } from '@shared/types/template.types';
+import type { ProjectStageTemplateDto } from '../../../../packages/shared/src/types/template.types';
 
 @ApiTags('Templates')
 @ApiBearerAuth()
