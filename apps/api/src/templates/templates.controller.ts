@@ -1,4 +1,3 @@
-// apps/api/src/templates/templates.controller.ts
 import { Body, Controller, Get, Param, Patch, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TemplatesService } from './templates.service';
