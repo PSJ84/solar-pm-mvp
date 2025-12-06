@@ -1,0 +1,333 @@
+// Prisma schema v2 초안 (설계용) - 실제 마이그레이션 미적용
+// packages/prisma/schema.prisma 참고, 템플릿-프로젝트 자동 생성 구조 개선
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------
+// 사용자 & 회사
+// ------------------------------
+model Company {
+  id        String  @id @default(cuid())
+  name      String
+  tags      String[] @default([])
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         User[]
+  projects      Project[]
+  templates     StageTemplate[]
+  shareLinks    ShareLink[]
+
+  @@index([deletedAt])
+  @@map("companies")
+}
+
+model User {
+  id       String  @id @default(cuid())
+  email    String  @unique
+  name     String?
+  role     String  @default("member")
+  companyId String
+  company  Company @relation(fields: [companyId], references: [id])
+
+  magicLinkToken   String?  @unique
+  magicLinkExpires DateTime?
+
+  tags      String[] @default([])
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedTasks Task[]         @relation("Assignee")
+  taskHistories TaskHistory[]
+  notifications Notification[]
+
+  @@index([companyId])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+// ------------------------------
+// 템플릿
+// ------------------------------
+model StageTemplate {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  name        String
+  description String?
+  order       Int      @default(0)
+  deletedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  taskTemplates TaskTemplate[]
+  projectStages ProjectStage[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([deletedAt])
+  @@map("stage_templates")
+}
+
+model TaskTemplate {
+  id                String        @id @default(cuid())
+  stageTemplateId   String
+  stageTemplate     StageTemplate @relation(fields: [stageTemplateId], references: [id], onDelete: Cascade)
+  title             String
+  description       String?
+  isMandatory       Boolean       @default(false)
+  defaultDueDays    Int?
+  defaultAssigneeRole String?
+  order             Int           @default(0)
+  deletedAt         DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  tasks Task[]
+
+  @@index([stageTemplateId])
+  @@index([deletedAt])
+  @@map("task_templates")
+}
+
+// ------------------------------
+// 프로젝트 및 단계 인스턴스
+// ------------------------------
+model Project {
+  id              String    @id @default(cuid())
+  companyId       String
+  company         Company   @relation(fields: [companyId], references: [id])
+  name            String
+  address         String?
+  capacityKw      Float?
+  status          String    @default("planning")
+  targetDate      DateTime?
+  permitNumber    String?
+  inspectionDate  DateTime?
+  constructionStartAt DateTime?
+  externalId      String?
+  tags            String[]  @default([])
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  stages       ProjectStage[]
+  documents    Document[]
+  shareLinks   ShareLink[]
+  riskScores   DelayRiskScore[]
+
+  @@index([companyId])
+  @@index([status])
+  @@index([permitNumber])
+  @@index([externalId])
+  @@index([deletedAt])
+  @@map("projects")
+}
+
+model ProjectStage {
+  id            String        @id @default(cuid())
+  projectId     String
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  templateId    String
+  template      StageTemplate @relation(fields: [templateId], references: [id])
+  status        String        @default("pending")
+  startedAt     DateTime?
+  submittedAt   DateTime?
+  completedAt   DateTime?
+  plannedStartAt DateTime?
+  plannedDueAt   DateTime?
+  deletedAt     DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  tasks Task[]
+
+  @@unique([projectId, templateId])
+  @@index([projectId])
+  @@index([templateId])
+  @@index([status])
+  @@index([submittedAt])
+  @@index([plannedDueAt])
+  @@index([deletedAt])
+  @@map("project_stages")
+}
+
+model Task {
+  id             String        @id @default(cuid())
+  projectStageId String
+  projectStage   ProjectStage  @relation(fields: [projectStageId], references: [id], onDelete: Cascade)
+  templateId     String?
+  template       TaskTemplate? @relation(fields: [templateId], references: [id])
+  title          String
+  description    String?
+  status         String        @default("pending")
+  dueDate        DateTime?
+  isMandatory    Boolean       @default(false)
+  assigneeId     String?
+  assignee       User?         @relation("Assignee", fields: [assigneeId], references: [id])
+  progress       Int?
+  priority       String?
+  tags           String[]      @default([])
+  deletedAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  histories  TaskHistory[]
+  photos     Photo[]
+  documents  Document[]
+
+  @@index([projectStageId])
+  @@index([templateId])
+  @@index([assigneeId])
+  @@index([dueDate])
+  @@index([status])
+  @@index([priority])
+  @@index([deletedAt])
+  @@map("tasks")
+}
+
+model TaskHistory {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  oldValue  String?
+  newValue  String?
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("task_histories")
+}
+
+// ------------------------------
+// 문서 및 사진
+// ------------------------------
+model Document {
+  id           String    @id @default(cuid())
+  projectId    String
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId       String?
+  task         Task?     @relation(fields: [taskId], references: [id])
+  fileName     String
+  fileUrl      String
+  fileSize     Int?
+  mimeType     String?
+  revision     Int       @default(1)
+  parentId     String?
+  isSupplementary Boolean @default(false)
+  expiryDate   DateTime?
+  docType      String?
+  externalId   String?
+  tags         String[]  @default([])
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([projectId])
+  @@index([taskId])
+  @@index([expiryDate])
+  @@index([externalId])
+  @@index([deletedAt])
+  @@map("documents")
+}
+
+model Photo {
+  id          String   @id @default(cuid())
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fileName    String
+  fileUrl     String
+  fileSize    Int?
+  latitude    Float?
+  longitude   Float?
+  description String?
+  takenAt     DateTime @default(now())
+  tags        String[] @default([])
+  deletedAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([taskId])
+  @@index([takenAt])
+  @@index([deletedAt])
+  @@map("photos")
+}
+
+// ------------------------------
+// 알림 / 공유 / 위험도
+// ------------------------------
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId String?
+  taskId    String?
+  type      String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model ShareLink {
+  id           String    @id @default(cuid())
+  token        String    @unique @default(cuid())
+  password     String?
+  expiresAt    DateTime?
+  allowedStages String[]
+  viewCount    Int       @default(0)
+  lastViewedAt DateTime?
+  projectId    String
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  externalId   String?
+  tags         String[]  @default([])
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([token])
+  @@index([projectId])
+  @@index([externalId])
+  @@index([deletedAt])
+  @@map("share_links")
+}
+
+model DelayRiskScore {
+  id               String   @id @default(cuid())
+  projectId        String
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  score            Int      @default(0)
+  severity         String   @default("low")
+  overdueTaskCount Int      @default(0)
+  upcomingTaskCount Int     @default(0)
+  completionRate   Float    @default(0)
+  maxDelayDays     Int      @default(0)
+  factors          String[]
+  calculatedAt     DateTime @default(now())
+
+  @@index([projectId])
+  @@index([severity])
+  @@index([calculatedAt])
+  @@map("delay_risk_scores")
+}
