@@ -10,6 +10,7 @@ import { ShareLinksModule } from './share-links/share-links.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { StagesModule } from './stages/stages.module';
+import { TemplatesModule } from './templates/templates.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { StagesModule } from './stages/stages.module';
     NotificationsModule,
     DashboardModule,
     StagesModule,
+    TemplatesModule,
   ],
 })
 export class AppModule {}
