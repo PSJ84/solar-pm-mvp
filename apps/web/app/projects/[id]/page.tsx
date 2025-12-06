@@ -4,23 +4,24 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
+  AlertCircle,
   ArrowLeft,
-  Share2,
-  MapPin,
-  Zap,
   Calendar,
   CheckCircle2,
   Circle,
   Clock,
-  AlertCircle,
   Copy,
-  Loader2,
-  Plus,
-  Trash2,
   Eye,
   EyeOff,
+  Loader2,
+  MapPin,
+  Plus,
+  Share2,
+  Trash2,
+  Zap,
 } from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
 import { cn, STATUS_LABELS, formatRelativeTime, getProgressColor } from '@/lib/utils';
 import { projectsApi, stagesApi, tasksApi } from '@/lib/api';
 import type { Project, ProjectStage, Task, TaskHistory, TaskStatus } from '@/types';
@@ -792,37 +793,37 @@ export default function ProjectDetailPage() {
 
           {/* 중앙: 태스크 테이블 */}
           <div className="flex-1 min-w-0">
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold text-slate-900">
-                      {activeStage?.template?.name || '태스크 목록'}
-                    </h3>
-                    <p className="text-sm text-slate-500">
-                      전체 {taskCounts.total}개 · 완료 {taskCounts.completed}개
-                    </p>
-                  </div>
-                  <label className="flex items-center gap-2 text-sm text-slate-600">
-                    <span className="hidden sm:inline">숨김 태스크 보기</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowHiddenTasks((prev) => !prev)}
-                      className={cn(
-                        'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                        showHiddenTasks ? 'bg-blue-600' : 'bg-slate-200',
-                      )}
-                      aria-pressed={showHiddenTasks}
-                      aria-label="숨김 태스크 보기 토글"
-                    >
-                      <span
-                        className={cn(
-                          'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
-                          showHiddenTasks ? 'translate-x-5' : 'translate-x-1',
-                        )}
-                      />
-                    </button>
-                  </label>
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-slate-900">
+                    {activeStage?.template?.name || '태스크 목록'}
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    전체 {taskCounts.total}개 · 완료 {taskCounts.completed}개
+                  </p>
                 </div>
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <span className="hidden sm:inline">숨김 태스크 보기</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowHiddenTasks((prev) => !prev)}
+                    className={cn(
+                      'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                      showHiddenTasks ? 'bg-blue-600' : 'bg-slate-200',
+                    )}
+                    aria-pressed={showHiddenTasks}
+                    aria-label="숨김 태스크 보기 토글"
+                  >
+                    <span
+                      className={cn(
+                        'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
+                        showHiddenTasks ? 'translate-x-5' : 'translate-x-1',
+                      )}
+                    />
+                  </button>
+                </label>
+              </div>
 
               <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
                 <div className="grid gap-4 sm:grid-cols-3">
@@ -960,7 +961,7 @@ export default function ProjectDetailPage() {
                   })
                 ) : (
                   <div className="px-5 py-8 text-center text-slate-500">
-                    선 택된 단계에 태스크가 없습니다.
+                    선택된 단계에 태스크가 없습니다.
                   </div>
                 )}
               </div>

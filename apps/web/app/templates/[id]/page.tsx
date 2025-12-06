@@ -1,4 +1,3 @@
-// apps/web/app/templates/[id]/page.tsx
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -16,6 +15,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
+
 import { AppShell } from '@/components/layout/AppShell';
 import { templatesApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
@@ -154,7 +154,13 @@ export default function TemplateDetailPage() {
       stages.map((stage, stageIndex) => ({
         ...stage,
         order: stageIndex,
-        tasks: stage.tasks.map((task, taskIndex) => ({ ...task, order: taskIndex })),
+        tasks: stage.tasks.map((task, taskIndex) => ({
+          ...task,
+          // 프론트에서 새로 만든 임시 태스크 id(`temp-...`)는
+          // 서버로 보낼 때 제거해서 "새 태스크"로 인식시키기
+          id: typeof task.id === 'string' && task.id.startsWith('temp-') ? undefined : task.id,
+          order: taskIndex,
+        })),
       })),
     [stages],
   );
@@ -212,7 +218,7 @@ export default function TemplateDetailPage() {
             <Badge label={`기본 마감 : +${task.defaultDueDays}일`} tone="blue" />
           )}
         </div>
-        {task.description && <p className="text-sm text-slate-600">{task.description}</p>}
+        {task.description && <p className="text-sm text-slate-600 mt-1">{task.description}</p>}
         <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
           <label className="inline-flex items-center gap-1">
             <input
@@ -245,7 +251,7 @@ export default function TemplateDetailPage() {
           type="button"
           className="p-2 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
           onClick={() => moveTask(stageIndex, taskIndex, 'down')}
-          disabled={taskIndex === stage.tasks.length - 1}
+          disabled={taskIndex === stages[stageIndex].tasks.length - 1}
         >
           <ArrowDown className="h-4 w-4" />
         </button>
