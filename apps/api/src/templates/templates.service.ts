@@ -1,4 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import type { StageTemplate, TaskTemplate } from '@prisma/client';
+
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   TemplateDetailDto,
@@ -6,8 +8,7 @@ import type {
   StageTemplateStageDto,
   StageTemplateTaskDto,
   ProjectStageTemplateDto,
-} from '../../../../packages/shared/src/types/template.types';
-import type { StageTemplate, TaskTemplate } from '@prisma/client';
+} from '@shared/types/template.types';
 
 @Injectable()
 export class TemplatesService {

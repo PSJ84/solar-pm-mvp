@@ -72,8 +72,8 @@ export class TasksService {
    * 태스크 상세 조회
    */
   async findOne(id: string) {
-    const task = await this.prisma.task.findUnique({
-      where: { id },
+    const task = await this.prisma.task.findFirst({
+      where: { id, deletedAt: null },
       include: {
         assignee: {
           select: { id: true, name: true, email: true },
@@ -128,6 +128,12 @@ export class TasksService {
     if (dto.assigneeId && dto.assigneeId !== existing.assigneeId) {
       changes.push(`담당자 변경`);
     }
+    if (dto.isMandatory !== undefined && dto.isMandatory !== existing.isMandatory) {
+      changes.push(`필수 여부 변경`);
+    }
+    if (dto.isActive !== undefined && dto.isActive !== existing.isActive) {
+      changes.push(`활성 여부 변경`);
+    }
 
     const task = await this.prisma.task.update({
       where: { id },
@@ -136,6 +142,8 @@ export class TasksService {
         description: dto.description,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         assigneeId: dto.assigneeId,
+        isMandatory: dto.isMandatory !== undefined ? dto.isMandatory : undefined,
+        isActive: dto.isActive !== undefined ? dto.isActive : undefined,
       },
     });
 
@@ -189,10 +197,15 @@ export class TasksService {
    * 태스크 삭제
    */
   async remove(id: string, userId?: string) {
-    await this.resolveUserId(userId);
+    const resolvedUserId = await this.resolveUserId(userId);
     const existing = await this.findOne(id);
 
-    const deleted = await this.prisma.task.delete({ where: { id } });
+    const deleted = await this.prisma.task.update({
+      where: { id },
+      data: { deletedAt: new Date(), isActive: false },
+    });
+
+    await this.createHistory(id, resolvedUserId, 'deleted', existing.status, existing.status, '태스크 삭제');
 
     // 둘 다 필요: 단계 상태 갱신 + 프로젝트 최근 수정일 갱신
     await this.updateStageStatus(existing.projectStageId);

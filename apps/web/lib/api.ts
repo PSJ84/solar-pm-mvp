@@ -154,7 +154,6 @@ export const templatesApi = {
   getOne: (id: string) => api.get<TemplateDetailDto>(`/templates/${id}`),
   updateStructure: (id: string, data: any) =>
     api.patch<TemplateDetailDto>(`/templates/${id}/structure`, data),
-};
 
 // Share Links
 export const shareLinksApi = {

@@ -55,6 +55,16 @@ export class UpdateTaskDto {
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  isMandatory?: boolean;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()
