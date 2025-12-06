@@ -1,6 +1,5 @@
 // apps/api/src/tasks/tasks.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, TaskStatus } from './dto/task.dto';
 
@@ -293,18 +292,14 @@ export class TasksService {
   /**
    * 태스크 변경 시 상위 프로젝트 업데이트 시간 갱신
    */
-  private async touchProjectByStage(
-    projectStageId: string,
-    prisma: Prisma.TransactionClient | PrismaService = this.prisma,
-  ) {
-    const stage = await prisma.projectStage.findUnique({
+  private async touchProjectByStage(projectStageId: string) {
+    const stage = await this.prisma.projectStage.findUnique({
       where: { id: projectStageId },
-      select: { projectId: true },
     });
 
     if (!stage) return;
 
-    await prisma.project.update({
+    await this.prisma.project.update({
       where: { id: stage.projectId },
       data: { updatedAt: new Date() },
     });
