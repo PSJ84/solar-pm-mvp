@@ -1,5 +1,6 @@
 // apps/api/src/tasks/tasks.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, TaskStatus } from './dto/task.dto';
 
@@ -179,7 +180,6 @@ export class TasksService {
     );
 
     await this.updateStageStatus(existing.projectStageId);
-
     await this.touchProjectByStage(existing.projectStageId);
 
     return task;
@@ -194,6 +194,7 @@ export class TasksService {
 
     const deleted = await this.prisma.task.delete({ where: { id } });
 
+    // 둘 다 필요: 단계 상태 갱신 + 프로젝트 최근 수정일 갱신
     await this.updateStageStatus(existing.projectStageId);
     await this.touchProjectByStage(existing.projectStageId);
 
@@ -242,7 +243,11 @@ export class TasksService {
   private async updateStageStatus(projectStageId: string) {
     const stage = await this.prisma.projectStage.findUnique({
       where: { id: projectStageId },
-      include: { tasks: { where: { deletedAt: null, isActive: true } } },
+      include: {
+        tasks: {
+          where: { deletedAt: null, isActive: true },
+        },
+      },
     });
 
     if (!stage) return;
@@ -272,9 +277,7 @@ export class TasksService {
     }
   }
 
-  /**
-   * 태스크 활성/비활성 토글
-   */
+  /** 태스크 활성/비활성 토글 */
   async updateActive(id: string, isActive: boolean) {
     const task = await this.findOne(id);
 
@@ -289,9 +292,7 @@ export class TasksService {
     return updated;
   }
 
-  /**
-   * 태스크 변경 시 상위 프로젝트 업데이트 시간 갱신
-   */
+  /** 태스크 변경 시 상위 프로젝트 업데이트 시간 갱신 */
   private async touchProjectByStage(projectStageId: string) {
     const stage = await this.prisma.projectStage.findUnique({
       where: { id: projectStageId },

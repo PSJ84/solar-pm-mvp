@@ -1,3 +1,4 @@
+// packages/shared/src/types/template.types.ts
 export interface StageTemplateTaskDto {
   id?: string;
   name: string;
