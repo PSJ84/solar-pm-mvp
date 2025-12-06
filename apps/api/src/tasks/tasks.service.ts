@@ -1,5 +1,6 @@
 // apps/api/src/tasks/tasks.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, TaskStatus } from './dto/task.dto';
 
@@ -60,6 +61,8 @@ export class TasksService {
 
     // 활동 로그 기록 (MVP #30)
     await this.createHistory(task.id, resolvedUserId, 'created', null, 'created');
+
+    await this.touchProjectByStage(dto.projectStageId);
 
     return task;
   }
@@ -140,6 +143,8 @@ export class TasksService {
       await this.createHistory(id, resolvedUserId, 'updated', null, null, changes.join(', '));
     }
 
+    await this.touchProjectByStage(existing.projectStageId);
+
     return task;
   }
 
@@ -175,6 +180,8 @@ export class TasksService {
 
     await this.updateStageStatus(existing.projectStageId);
 
+    await this.touchProjectByStage(existing.projectStageId);
+
     return task;
   }
 
@@ -183,8 +190,13 @@ export class TasksService {
    */
   async remove(id: string, userId?: string) {
     await this.resolveUserId(userId);
-    await this.findOne(id);
-    return this.prisma.task.delete({ where: { id } });
+    const existing = await this.findOne(id);
+
+    const deleted = await this.prisma.task.delete({ where: { id } });
+
+    await this.touchProjectByStage(existing.projectStageId);
+
+    return deleted;
   }
 
   /**
@@ -256,5 +268,25 @@ export class TasksService {
         data: { status: derivedStatus },
       });
     }
+  }
+
+  /**
+   * 태스크 변경 시 상위 프로젝트 업데이트 시간 갱신
+   */
+  private async touchProjectByStage(
+    projectStageId: string,
+    prisma: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    const stage = await prisma.projectStage.findUnique({
+      where: { id: projectStageId },
+      select: { projectId: true },
+    });
+
+    if (!stage) return;
+
+    await prisma.project.update({
+      where: { id: stage.projectId },
+      data: { updatedAt: new Date() },
+    });
   }
 }
