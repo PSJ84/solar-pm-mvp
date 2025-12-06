@@ -1,5 +1,6 @@
 // apps/web/lib/api.ts
 import axios from 'axios';
+import type { TemplateDetailDto, TemplateListItemDto } from '@shared/types/template.types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -145,6 +146,12 @@ export const stagesApi = {
   ) => api.patch(`/stages/${id}/dates`, data),
   updateActive: (id: string, isActive: boolean) =>
     api.patch(`/stages/${id}/active`, { isActive }),
+};
+
+// Templates
+export const templatesApi = {
+  getAll: () => api.get<TemplateListItemDto[]>('/templates'),
+  getOne: (id: string) => api.get<TemplateDetailDto>(`/templates/${id}`),
 };
 
 // Share Links

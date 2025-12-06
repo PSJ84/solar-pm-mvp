@@ -8,6 +8,7 @@ export interface StageTemplateTaskDto {
   ownerCategory?: string;
   automationCategory?: string;
   order: number;
+  defaultDueDays?: number;
 }
 
 export interface StageTemplateStageDto {
@@ -26,4 +27,22 @@ export interface ProjectStageTemplateDto {
   description?: string;
   isDefault: boolean;
   stages: StageTemplateStageDto[];
+}
+
+export interface TemplateListItemDto {
+  id: string;
+  name: string;
+  description?: string;
+  isDefault: boolean;
+  stageCount: number;
+  taskCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TemplateDetailDto extends ProjectStageTemplateDto {
+  stageCount: number;
+  taskCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
