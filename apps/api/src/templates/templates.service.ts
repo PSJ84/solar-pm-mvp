@@ -3,12 +3,12 @@ import type { StageTemplate, TaskTemplate } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import type {
-  TemplateDetailDto,
-  TemplateListItemDto,
+  ProjectStageTemplateDto,
   StageTemplateStageDto,
   StageTemplateTaskDto,
-  ProjectStageTemplateDto,
-} from '@shared/types/template.types';
+  TemplateDetailDto,
+  TemplateListItemDto,
+} from '../../../../packages/shared/src/types/template.types';
 
 @Injectable()
 export class TemplatesService {
