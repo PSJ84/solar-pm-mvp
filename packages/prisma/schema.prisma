@@ -230,6 +230,7 @@ model Task {
 
   status               TaskStatus   @default(pending) // task state (To-Do status)
   memo                 String?      // short "current state" memo
+  note                 String?      @db.Text
   waitingFor           String?      // what/who we are waiting for (when status = waiting)
   // MVP #6: 오늘 마감 위젯 연동
   dueDate              DateTime?    // official due date (used for My Work D-Day)

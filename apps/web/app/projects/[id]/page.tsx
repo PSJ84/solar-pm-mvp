@@ -357,7 +357,7 @@ export default function ProjectDetailPage() {
     }: {
       taskId: string;
       stageId: string;
-      data: Partial<Pick<Task, 'title' | 'isActive' | 'startDate' | 'completedDate' | 'dueDate'>>;
+      data: Partial<Pick<Task, 'title' | 'isActive' | 'startDate' | 'completedDate' | 'dueDate' | 'note'>>;
     }) => {
       const response = await tasksApi.update(taskId, data);
       return response.data;
@@ -606,6 +606,17 @@ export default function ProjectDetailPage() {
     if (!nextTitle || nextTitle.trim() === '' || nextTitle === task.title || task.id.startsWith('temp-')) return;
 
     updateTaskFields({ taskId: task.id, stageId: activeStage.id, data: { title: nextTitle.trim() } });
+  };
+
+  const handleCompletionToggle = (task: Task, checked: boolean) => {
+    if (!task?.id || isUpdatingTask || task.isActive === false) return;
+    const nextStatus: TaskStatus = checked ? 'completed' : 'pending';
+    updateTaskStatus({ taskId: task.id, nextStatus });
+  };
+
+  const handleTaskNoteChange = (task: Task, value: string) => {
+    if (!task?.id || !activeStage?.id) return;
+    updateTaskFields({ taskId: task.id, stageId: activeStage.id, data: { note: value } });
   };
 
   const handleStatusToggle = (task: Task) => {
@@ -933,49 +944,91 @@ export default function ProjectDetailPage() {
                       <div
                         key={task.id}
                         className={cn(
-                          'flex flex-col gap-3 px-5 py-4 hover:bg-slate-50 transition-colors sm:flex-row sm:items-center sm:gap-4',
+                          'flex flex-col gap-3 px-5 py-4 hover:bg-slate-50 transition-colors',
                           !isTaskActive && showHiddenTasks && 'opacity-60',
                         )}
                       >
-                        <div className="flex-1 min-w-0 space-y-2">
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">{`#${index + 1}`}</span>
-                            {statusConfig && (
-                              <span className={cn('px-2 py-0.5 rounded-full font-medium', statusConfig.color)}>
-                                {statusConfig.label}
-                              </span>
-                            )}
-                            {!isTaskActive && showHiddenTasks && (
-                              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">숨김</span>
-                            )}
-                            {task.isMandatory && (
-                              <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700">필수</span>
-                            )}
+                        <div className="flex flex-col gap-3 w-full">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={task.status === 'completed'}
+                                  onChange={(e) => handleCompletionToggle(task, e.target.checked)}
+                                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                  disabled={isUpdatingTask || !isTaskActive || isSavingTaskFields}
+                                />
+                                <span>완료</span>
+                              </label>
+
+                              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={isTaskActive}
+                                  onChange={() => handleTaskActiveToggle(task)}
+                                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                  disabled={isSavingTaskFields}
+                                />
+                                <span>활성</span>
+                              </label>
+
+                              <div className="flex-1 min-w-0 space-y-1">
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                  <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">{`#${index + 1}`}</span>
+                                  {task.isMandatory && (
+                                    <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700">필수</span>
+                                  )}
+                                  {statusConfig && (
+                                    <span className={cn('px-2 py-0.5 rounded-full font-medium', statusConfig.color)}>
+                                      {statusConfig.label}
+                                    </span>
+                                  )}
+                                  {!isTaskActive && showHiddenTasks && (
+                                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">숨김</span>
+                                  )}
+                                </div>
+
+                                <input
+                                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  value={titleValue}
+                                  onChange={(e) => handleTaskTitleChange(task.id, e.target.value)}
+                                  onBlur={() => handleTaskTitleBlur(task)}
+                                  placeholder="태스크 이름"
+                                  disabled={isSavingTaskFields}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 self-start">
+                              <button
+                                type="button"
+                                disabled={isUpdatingTask || !isTaskActive || isSavingTaskFields}
+                                onClick={() => handleStatusToggle(task)}
+                                className="inline-flex items-center gap-1 px-3 py-2 text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:opacity-50"
+                              >
+                                {task.status === 'completed' ? (
+                                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                ) : task.status === 'in_progress' ? (
+                                  <Clock className="h-4 w-4 text-blue-500" />
+                                ) : (
+                                  <Circle className="h-4 w-4 text-slate-400" />
+                                )}
+                                <span>상태</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTask(task)}
+                                disabled={isDeletingTask || isSavingTaskFields}
+                                className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                                aria-label={`${task.title} 삭제`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
 
-                          <input
-                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            value={titleValue}
-                            onChange={(e) => handleTaskTitleChange(task.id, e.target.value)}
-                            onBlur={() => handleTaskTitleBlur(task)}
-                            placeholder="태스크 이름"
-                            disabled={isSavingTaskFields}
-                          />
-
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700">
-                            <label className="inline-flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={isTaskActive}
-                                onChange={() => handleTaskActiveToggle(task)}
-                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                disabled={isSavingTaskFields}
-                              />
-                              <span>활성</span>
-                            </label>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-2">
+                          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
                             <label className="flex items-center gap-2">
                               <span>기한</span>
                               <input
@@ -1004,33 +1057,17 @@ export default function ProjectDetailPage() {
                               />
                             </label>
                           </div>
-                        </div>
 
-                        <div className="flex items-center gap-2 self-end sm:self-center">
-                          <button
-                            type="button"
-                            disabled={isUpdatingTask || !isTaskActive || isSavingTaskFields}
-                            onClick={() => handleStatusToggle(task)}
-                            className="inline-flex items-center gap-1 px-3 py-2 text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:opacity-50"
-                          >
-                            {task.status === 'completed' ? (
-                              <CheckCircle2 className="h-4 w-4 text-green-500" />
-                            ) : task.status === 'in_progress' ? (
-                              <Clock className="h-4 w-4 text-blue-500" />
-                            ) : (
-                              <Circle className="h-4 w-4 text-slate-400" />
-                            )}
-                            <span>상태</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteTask(task)}
-                            disabled={isDeletingTask || isSavingTaskFields}
-                            className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
-                            aria-label={`${task.title} 삭제`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          <div className="space-y-1">
+                            <label className="block text-xs font-medium text-slate-500">메모</label>
+                            <input
+                              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              value={task.note ?? ''}
+                              onChange={(e) => handleTaskNoteChange(task, e.target.value)}
+                              placeholder="태스크에 대한 메모를 입력하세요"
+                              disabled={isSavingTaskFields}
+                            />
+                          </div>
                         </div>
                       </div>
                     );

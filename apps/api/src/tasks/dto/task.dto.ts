@@ -24,6 +24,11 @@ export class CreateTaskDto {
   @IsDateString()
   dueDate?: string | null;
 
+  @ApiPropertyOptional({ description: '태스크 메모' })
+  @IsOptional()
+  @IsString()
+  note?: string;
+
   @ApiPropertyOptional({ description: '태스크 시작일' })
   @IsOptional()
   @IsDateString()
@@ -38,6 +43,11 @@ export class CreateTaskDto {
   @IsOptional()
   @IsString()
   assigneeId?: string;
+
+  @ApiPropertyOptional({ description: '태스크 메모' })
+  @IsOptional()
+  @IsString()
+  note?: string;
 
   @ApiPropertyOptional({ default: false })
   @IsOptional()
