@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { Request } from 'express';
 import type { ProjectStageTemplateDto } from '@shared/types/template.types';
 
+
 @ApiTags('Templates')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -43,7 +44,6 @@ export class TemplatesController {
 
     return this.templatesService.updateStructure(id, payload, companyId);
   }
-
   @Post()
   @ApiOperation({ summary: '체크리스트 템플릿 생성' })
   async create(@Body() payload: { name: string; description?: string }, @Req() req: Request) {

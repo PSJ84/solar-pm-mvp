@@ -152,7 +152,6 @@ export class TasksService {
     if (dto.isActive !== undefined && dto.isActive !== existing.isActive) {
       changes.push(`활성 여부 변경`);
     }
-
     const nextStartDate =
       dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : existing.startDate;
     const nextCompletedDate =
@@ -179,6 +178,7 @@ export class TasksService {
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         assigneeId: dto.assigneeId,
         isMandatory: dto.isMandatory !== undefined ? dto.isMandatory : undefined,
+        isMandatory: dto.isMandatory !== undefined ? dto.isMandatory : undefined,
         isActive: dto.isActive !== undefined ? dto.isActive : undefined,
         startDate: dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : undefined,
         completedDate:
@@ -186,6 +186,7 @@ export class TasksService {
         status: derivedStatus,
       },
     });
+
 
     // 변경 내역이 있으면 히스토리 기록
     if (changes.length > 0) {
