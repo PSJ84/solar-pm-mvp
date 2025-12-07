@@ -24,7 +24,7 @@ import type {
   StageTemplateStageDto,
   StageTemplateTaskDto,
   ProjectStageTemplateDto,
-} from '@shared/types/template.types';
+} from '@/types/template.types';
 
 const Badge = ({ label, tone = 'slate' }: { label: string; tone?: 'slate' | 'blue' | 'amber' | 'emerald' }) => {
   const toneStyles: Record<string, string> = {
@@ -54,11 +54,7 @@ export default function TemplateDetailPage() {
   const [toast, setToast] = useState<{ message: string; type?: 'error' | 'info' | 'success' } | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const showToast = (
-    message: string,
-    type: 'error' | 'info' | 'success' = 'info',
-    duration = 3000,
-  ) => {
+  const showToast = (message: string, type: 'error' | 'info' | 'success' = 'info', duration = 3000) => {
     if (toastTimeoutRef.current) {
       clearTimeout(toastTimeoutRef.current);
     }
@@ -154,7 +150,15 @@ export default function TemplateDetailPage() {
       stages.map((stage, stageIndex) => ({
         ...stage,
         order: stageIndex,
-        tasks: stage.tasks.map((task, taskIndex) => ({ ...task, order: taskIndex })),
+        tasks: stage.tasks.map((task, taskIndex) => {
+          const isTempId = task.id?.startsWith('temp-'); // 임시 id인지 체크
+          const { id, ...rest } = task;
+
+          return {
+            ...(isTempId ? rest : { ...rest, id }), // temp-id면 id 제거해서 전송
+            order: taskIndex,
+          };
+        }),
       })),
     [stages],
   );
@@ -176,11 +180,16 @@ export default function TemplateDetailPage() {
       const res = await templatesApi.updateStructure(templateId, payload);
       return res.data;
     },
-    onSuccess: (updated) => {
+    onSuccess: (updated: TemplateDetailDto) => {
       queryClient.setQueryData(['template', templateId], updated);
       setTemplateName(updated.name || '');
       setTemplateDescription(updated.description || '');
-      setStages(updated.stages.map((stage) => ({ ...stage, tasks: stage.tasks ? [...stage.tasks] : [] })));
+      setStages(
+        updated.stages.map((stage: StageTemplateStageDto) => ({
+          ...stage,
+          tasks: stage.tasks ? [...stage.tasks] : [],
+        })),
+      );
       showToast('템플릿이 저장되었습니다.', 'success');
     },
     onError: (error: any) => {
@@ -189,76 +198,78 @@ export default function TemplateDetailPage() {
     },
   });
 
-  const renderTaskRow = (stageIndex: number, task: StageTemplateTaskDto, taskIndex: number) => (
-    <div
-      key={task.id}
-      className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg bg-white"
-    >
-      <CircleDot className="h-4 w-4 text-slate-500 mt-1" />
-      <div className="flex-1 space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            className="w-full md:w-auto min-w-[200px] flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
-            value={task.name}
-            onChange={(e) => updateTaskField(stageIndex, taskIndex, 'name', e.target.value)}
-          />
-          {task.isMandatory && <Badge label="필수" tone="amber" />}
-          {task.isDefaultActive === false ? (
-            <Badge label="기본 비활성" tone="slate" />
-          ) : (
-            <Badge label="기본 활성" tone="emerald" />
-          )}
-          {typeof task.defaultDueDays === 'number' && (
-            <Badge label={`기본 마감 : +${task.defaultDueDays}일`} tone="blue" />
-          )}
+  const renderTaskRow = (stageIndex: number, task: StageTemplateTaskDto, taskIndex: number) => {
+    const currentStage = stages[stageIndex];
+    const isLastTask = currentStage && currentStage.tasks && taskIndex === currentStage.tasks.length - 1;
+
+    return (
+      <div key={task.id} className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg bg-white">
+        <CircleDot className="h-4 w-4 text-slate-500 mt-1" />
+        <div className="flex-1 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className="w-full md:w-auto min-w-[200px] flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
+              value={task.name}
+              onChange={(e) => updateTaskField(stageIndex, taskIndex, 'name', e.target.value)}
+            />
+            {task.isMandatory && <Badge label="필수" tone="amber" />}
+            {task.isDefaultActive === false ? (
+              <Badge label="기본 비활성" tone="slate" />
+            ) : (
+              <Badge label="기본 활성" tone="emerald" />
+            )}
+            {typeof task.defaultDueDays === 'number' && (
+              <Badge label={`기본 마감 : +${task.defaultDueDays}일`} tone="blue" />
+            )}
+          </div>
+          {task.description && <p className="text-sm text-slate-600">{task.description}</p>}
+          <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
+            <label className="inline-flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={task.isMandatory}
+                onChange={(e) => updateTaskField(stageIndex, taskIndex, 'isMandatory', e.target.checked)}
+              />
+              <span>필수</span>
+            </label>
+            <label className="inline-flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={task.isDefaultActive !== false}
+                onChange={(e) => updateTaskField(stageIndex, taskIndex, 'isDefaultActive', e.target.checked)}
+              />
+              <span>기본 활성</span>
+            </label>
+          </div>
         </div>
-        {task.description && <p className="text-sm text-slate-600">{task.description}</p>}
-        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
-          <label className="inline-flex items-center gap-1">
-            <input
-              type="checkbox"
-              checked={task.isMandatory}
-              onChange={(e) => updateTaskField(stageIndex, taskIndex, 'isMandatory', e.target.checked)}
-            />
-            <span>필수</span>
-          </label>
-          <label className="inline-flex items-center gap-1">
-            <input
-              type="checkbox"
-              checked={task.isDefaultActive !== false}
-              onChange={(e) => updateTaskField(stageIndex, taskIndex, 'isDefaultActive', e.target.checked)}
-            />
-            <span>기본 활성</span>
-          </label>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            className="p-2 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            onClick={() => moveTask(stageIndex, taskIndex, 'up')}
+            disabled={taskIndex === 0}
+          >
+            <ArrowUp className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className="p-2 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            onClick={() => moveTask(stageIndex, taskIndex, 'down')}
+            disabled={isLastTask}
+          >
+            <ArrowDown className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className="p-2 rounded-md border border-red-200 text-red-600 hover:bg-red-50"
+            onClick={() => removeTask(stageIndex, taskIndex)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
         </div>
       </div>
-      <div className="flex flex-col gap-2">
-        <button
-          type="button"
-          className="p-2 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-          onClick={() => moveTask(stageIndex, taskIndex, 'up')}
-          disabled={taskIndex === 0}
-        >
-          <ArrowUp className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          className="p-2 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-          onClick={() => moveTask(stageIndex, taskIndex, 'down')}
-          disabled={taskIndex === stage.tasks.length - 1}
-        >
-          <ArrowDown className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          className="p-2 rounded-md border border-red-200 text-red-600 hover:bg-red-50"
-          onClick={() => removeTask(stageIndex, taskIndex)}
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <AppShell>

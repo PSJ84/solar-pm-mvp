@@ -152,6 +152,7 @@ export class TasksService {
     if (dto.isActive !== undefined && dto.isActive !== existing.isActive) {
       changes.push(`활성 여부 변경`);
     }
+
     const nextStartDate =
       dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : existing.startDate;
     const nextCompletedDate =
@@ -167,7 +168,9 @@ export class TasksService {
       : undefined;
 
     if (derivedStatus && derivedStatus !== existing.status) {
-      changes.push(`상태: ${this.getStatusLabel(existing.status)} → ${this.getStatusLabel(derivedStatus)}`);
+      changes.push(
+        `상태: ${this.getStatusLabel(existing.status)} → ${this.getStatusLabel(derivedStatus)}`,
+      );
     }
 
     const task = await this.prisma.task.update({
@@ -178,19 +181,29 @@ export class TasksService {
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         assigneeId: dto.assigneeId,
         isMandatory: dto.isMandatory !== undefined ? dto.isMandatory : undefined,
-        isMandatory: dto.isMandatory !== undefined ? dto.isMandatory : undefined,
         isActive: dto.isActive !== undefined ? dto.isActive : undefined,
-        startDate: dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : undefined,
+        startDate:
+          dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : undefined,
         completedDate:
-          dto.completedDate !== undefined ? (dto.completedDate ? new Date(dto.completedDate) : null) : undefined,
-        status: derivedStatus,
+          dto.completedDate !== undefined
+            ? dto.completedDate
+              ? new Date(dto.completedDate)
+              : null
+            : undefined,
+        status: derivedStatus, // undefined면 기존 값 유지
       },
     });
 
-
     // 변경 내역이 있으면 히스토리 기록
     if (changes.length > 0) {
-      await this.createHistory(id, resolvedUserId, 'updated', null, null, changes.join(', '));
+      await this.createHistory(
+        id,
+        resolvedUserId,
+        'updated',
+        null,
+        null,
+        changes.join(', '),
+      );
     }
 
     await this.updateStageStatus(existing.projectStageId);
