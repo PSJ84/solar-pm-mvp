@@ -220,8 +220,8 @@ export class TasksService {
     const resolvedUserId = await this.resolveUserId(userId);
     const existing = await this.findOne(id);
 
-    const oldStatus = existing.status as TaskStatus;
-    const newStatus = dto.status;
+    const oldStatus: TaskStatus = existing.status as TaskStatus;
+    const newStatus: TaskStatus = dto.status as TaskStatus;
     const now = new Date();
 
     const statusChanged = oldStatus !== newStatus;
@@ -267,7 +267,7 @@ export class TasksService {
       // completedAt 처리
       if (newStatus === TaskStatus.COMPLETED) {
         data.completedAt = now;
-      } else if (oldStatus === TaskStatus.COMPLETED && newStatus !== TaskStatus.COMPLETED) {
+      } else if (oldStatus === TaskStatus.COMPLETED) {
         // 완료 → 다른 상태로 롤백되면 completedAt 비우기
         data.completedAt = null;
       }
