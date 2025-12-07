@@ -4,27 +4,27 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  AlertCircle,
   ArrowLeft,
+  Share2,
+  MapPin,
+  Zap,
   Calendar,
   CheckCircle2,
   Circle,
   Clock,
+  AlertCircle,
   Copy,
+  Loader2,
+  Plus,
+  Trash2,
   Eye,
   EyeOff,
-  Loader2,
-  MapPin,
-  Plus,
-  Share2,
-  Trash2,
-  Zap,
 } from 'lucide-react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn, STATUS_LABELS, formatRelativeTime, getProgressColor } from '@/lib/utils';
-import { projectsApi, stagesApi, tasksApi } from '@/lib/api';
+import { projectsApi, stagesApi, tasksApi, templatesApi } from '@/lib/api';
 import type { Project, ProjectStage, Task, TaskHistory, TaskStatus } from '@/types';
+import type { TemplateListItemDto } from '@shared/types/template.types';
 
 type DerivedStage = ProjectStage & { derivedStatus: string };
 
@@ -101,6 +101,8 @@ export default function ProjectDetailPage() {
   const [taskTitleDrafts, setTaskTitleDrafts] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<{ message: string; type?: 'error' | 'info' | 'success' } | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isAddStageModalOpen, setIsAddStageModalOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
   const projectQueryKey = useMemo(() => ['project', projectId], [projectId]);
   const activityQueryKey = useMemo(
@@ -187,6 +189,15 @@ export default function ProjectDetailPage() {
     },
     enabled: hasProjectId,
     staleTime: 15 * 1000,
+  });
+
+  const { data: templateOptions } = useQuery<TemplateListItemDto[]>({
+    queryKey: ['templates'],
+    queryFn: async () => {
+      const res = await templatesApi.getAll();
+      return res.data;
+    },
+    enabled: isAddStageModalOpen,
   });
 
   const { mutate: updateTaskStatus, isPending: isUpdatingTask } = useMutation({
@@ -347,7 +358,7 @@ export default function ProjectDetailPage() {
     }: {
       taskId: string;
       stageId: string;
-      data: Partial<Pick<Task, 'title' | 'isMandatory' | 'isActive'>>;
+      data: Partial<Pick<Task, 'title' | 'isMandatory' | 'isActive' | 'startDate' | 'completedDate'>>;
     }) => {
       const response = await tasksApi.update(taskId, data);
       return response.data;
@@ -474,6 +485,36 @@ export default function ProjectDetailPage() {
     onSettled: () => setIsCloning(false),
   });
 
+  const { mutate: addStageFromTemplate, isPending: isAddingStage } = useMutation({
+    mutationFn: async ({ templateId, afterStageId }: { templateId: string; afterStageId?: string }) => {
+      const response = await projectsApi.addStageFromTemplate(projectId, { templateId, afterStageId });
+      return response.data as Project;
+    },
+    onSuccess: (updatedProject) => {
+      queryClient.setQueryData<Project>(projectQueryKey, updatedProject);
+      const previousStages = queryClient.getQueryData<Project>(projectQueryKey)?.stages || [];
+      const newStage = updatedProject.stages?.find(
+        (stage) => !previousStages.some((existing) => existing.id === stage.id),
+      );
+      const newStageId = newStage?.id || updatedProject.stages?.[updatedProject.stages.length - 1]?.id;
+
+      if (newStageId) {
+        setActiveStageId(newStageId);
+      }
+
+      setIsAddStageModalOpen(false);
+      setSelectedTemplateId('');
+      showToast('단계가 추가되었습니다.', 'success');
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.message || '단계를 추가하지 못했습니다.';
+      showToast(message, 'error');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: projectQueryKey });
+    },
+  });
+
   useEffect(() => {
     if (visibleStages.length) {
       setActiveStageId((prev) => {
@@ -512,6 +553,12 @@ export default function ProjectDetailPage() {
     setTaskTitleDrafts({});
   }, [activeStageId]);
 
+  useEffect(() => {
+    if (isAddStageModalOpen && templateOptions?.length && !selectedTemplateId) {
+      setSelectedTemplateId(templateOptions[0].id);
+    }
+  }, [isAddStageModalOpen, templateOptions, selectedTemplateId]);
+
   const taskCounts = useMemo(() => {
     return {
       total: projectWithDerived?.totalTasks ?? 0,
@@ -535,6 +582,18 @@ export default function ProjectDetailPage() {
   const handleTaskMandatoryToggle = (task: Task) => {
     if (!task?.id || !activeStage?.id) return;
     updateTaskFields({ taskId: task.id, stageId: activeStage.id, data: { isMandatory: !task.isMandatory } });
+  };
+
+  const handleTaskDateChange = (task: Task, field: 'startDate' | 'completedDate', value: string) => {
+    if (!task?.id || !activeStage?.id) return;
+
+    updateTaskFields({
+      taskId: task.id,
+      stageId: activeStage.id,
+      data: {
+        [field]: value ? new Date(value).toISOString() : null,
+      },
+    });
   };
 
   const handleTaskTitleChange = (taskId: string, value: string) => {
@@ -726,12 +785,20 @@ export default function ProjectDetailPage() {
                         'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
                         showHiddenStages ? 'translate-x-5' : 'translate-x-1',
                       )}
-                    />
-                  </button>
-                </label>
-              </div>
-              <nav className="space-y-1">
-                {visibleStages.map((stage) => {
+                  />
+                </button>
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsAddStageModalOpen(true)}
+                className="mt-3 inline-flex items-center gap-2 w-full justify-center px-3 py-2 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100"
+              >
+                <Plus className="h-4 w-4" />
+                <span>단계 추가</span>
+              </button>
+            </div>
+            <nav className="space-y-1">
+              {visibleStages.map((stage) => {
                   const isActive = stage.id === activeStageId;
                   const stageIsVisible = stage.isActive !== false;
                   const activeStageTasks = (stage.tasks || []).filter((t) => t.isActive !== false);
@@ -793,37 +860,37 @@ export default function ProjectDetailPage() {
 
           {/* 중앙: 태스크 테이블 */}
           <div className="flex-1 min-w-0">
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-slate-900">
-                    {activeStage?.template?.name || '태스크 목록'}
-                  </h3>
-                  <p className="text-sm text-slate-500">
-                    전체 {taskCounts.total}개 · 완료 {taskCounts.completed}개
-                  </p>
-                </div>
-                <label className="flex items-center gap-2 text-sm text-slate-600">
-                  <span className="hidden sm:inline">숨김 태스크 보기</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowHiddenTasks((prev) => !prev)}
-                    className={cn(
-                      'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                      showHiddenTasks ? 'bg-blue-600' : 'bg-slate-200',
-                    )}
-                    aria-pressed={showHiddenTasks}
-                    aria-label="숨김 태스크 보기 토글"
-                  >
-                    <span
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">
+                      {activeStage?.template?.name || '태스크 목록'}
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      전체 {taskCounts.total}개 · 완료 {taskCounts.completed}개
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-slate-600">
+                    <span className="hidden sm:inline">숨김 태스크 보기</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowHiddenTasks((prev) => !prev)}
                       className={cn(
-                        'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
-                        showHiddenTasks ? 'translate-x-5' : 'translate-x-1',
+                        'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                        showHiddenTasks ? 'bg-blue-600' : 'bg-slate-200',
                       )}
-                    />
-                  </button>
-                </label>
-              </div>
+                      aria-pressed={showHiddenTasks}
+                      aria-label="숨김 태스크 보기 토글"
+                    >
+                      <span
+                        className={cn(
+                          'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
+                          showHiddenTasks ? 'translate-x-5' : 'translate-x-1',
+                        )}
+                      />
+                    </button>
+                  </label>
+                </div>
 
               <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
                 <div className="grid gap-4 sm:grid-cols-3">
@@ -928,6 +995,27 @@ export default function ProjectDetailPage() {
                               <span className="text-xs text-slate-500">담당: {task.assignee.name}</span>
                             )}
                           </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-2">
+                            <label className="flex items-center gap-2">
+                              <span>시작일</span>
+                              <input
+                                type="date"
+                                value={normalizeDateInput(task.startDate)}
+                                onChange={(e) => handleTaskDateChange(task, 'startDate', e.target.value)}
+                                className="rounded border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            </label>
+                            <label className="flex items-center gap-2">
+                              <span>완료일</span>
+                              <input
+                                type="date"
+                                value={normalizeDateInput(task.completedDate)}
+                                onChange={(e) => handleTaskDateChange(task, 'completedDate', e.target.value)}
+                                className="rounded border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            </label>
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-2 self-end sm:self-center">
@@ -961,7 +1049,7 @@ export default function ProjectDetailPage() {
                   })
                 ) : (
                   <div className="px-5 py-8 text-center text-slate-500">
-                    선택된 단계에 태스크가 없습니다.
+                    선 택된 단계에 태스크가 없습니다.
                   </div>
                 )}
               </div>
@@ -1029,6 +1117,50 @@ export default function ProjectDetailPage() {
           </div>
         </div>
       </main>
+      {isAddStageModalOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="space-y-1">
+              <h3 className="text-lg font-semibold text-slate-900">템플릿에서 단계 추가</h3>
+              <p className="text-sm text-slate-600">추가할 템플릿을 선택하면 해당 단계와 태스크가 프로젝트에 복사됩니다.</p>
+            </div>
+            <label className="block text-sm text-slate-700 space-y-2">
+              <span>템플릿 선택</span>
+              <select
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={selectedTemplateId}
+                onChange={(e) => setSelectedTemplateId(e.target.value)}
+              >
+                {(templateOptions || []).map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddStageModalOpen(false);
+                  setSelectedTemplateId('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={!selectedTemplateId || isAddingStage}
+                onClick={() => selectedTemplateId && addStageFromTemplate({ templateId: selectedTemplateId })}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isAddingStage ? '추가 중...' : '단계 추가'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {toast && (
         <div
           role="alert"

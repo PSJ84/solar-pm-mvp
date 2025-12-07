@@ -124,6 +124,8 @@ export const projectsApi = {
   // [v1.1] 프로젝트 복제
   clone: (id: string, data?: { name?: string; copyAssignees?: boolean }) =>
     api.post<{ id: string; name: string }>(`/projects/${id}/clone`, data || {}),
+  addStageFromTemplate: (projectId: string, data: { templateId: string; afterStageId?: string }) =>
+    api.post(`/projects/${projectId}/stages/from-template`, data),
 };
 
 // Tasks
@@ -152,8 +154,9 @@ export const stagesApi = {
 export const templatesApi = {
   getAll: () => api.get<TemplateListItemDto[]>('/templates'),
   getOne: (id: string) => api.get<TemplateDetailDto>(`/templates/${id}`),
-  updateStructure: (id: string, data: any) =>
-    api.patch<TemplateDetailDto>(`/templates/${id}/structure`, data),
+  updateStructure: (id: string, data: any) => api.patch<TemplateDetailDto>(`/templates/${id}/structure`, data),
+  create: (data: { name: string; description?: string }) => api.post<TemplateDetailDto>('/templates', data),
+  delete: (id: string) => api.delete(`/templates/${id}`),
 };
 
 // Share Links

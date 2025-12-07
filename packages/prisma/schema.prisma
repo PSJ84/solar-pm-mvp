@@ -222,6 +222,8 @@ model Task {
   
   // MVP #6: 오늘 마감 위젯 연동
   dueDate         DateTime?
+  startDate       DateTime?
+  completedDate   DateTime?
   status          String        @default("pending") // pending, in_progress, completed, delayed
   isActive        Boolean       @default(true)
 

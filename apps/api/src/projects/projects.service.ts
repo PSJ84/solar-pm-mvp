@@ -179,7 +179,7 @@ export class ProjectsService {
               orderBy: { createdAt: 'asc' },
             },
           },
-          orderBy: { template: { order: 'asc' } },
+          orderBy: [{ template: { order: 'asc' } }, { createdAt: 'asc' }],
         },
         shareLinks: {
           where: {
@@ -238,6 +238,88 @@ export class ProjectsService {
         tags: dto.tags,
       },
     });
+  }
+
+  async addStageFromTemplate(
+    projectId: string,
+    templateId: string,
+    position?: { afterStageId?: string },
+    companyId?: string,
+  ) {
+    const resolvedCompanyId = await this.resolveCompanyId(companyId);
+
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, companyId: resolvedCompanyId, deletedAt: null },
+    });
+
+    if (!project) {
+      throw new NotFoundException('프로젝트를 찾을 수 없습니다.');
+    }
+
+    const stageTemplate = await this.prisma.stageTemplate.findFirst({
+      where: { id: templateId, companyId: resolvedCompanyId, deletedAt: null },
+      include: { taskTemplates: { where: { deletedAt: null }, orderBy: { order: 'asc' } } },
+    });
+
+    if (!stageTemplate) {
+      throw new NotFoundException('템플릿을 찾을 수 없습니다.');
+    }
+
+    let createdStageId: string | null = null;
+
+    await this.prisma.$transaction(async (tx) => {
+      const projectStage = await tx.projectStage.create({
+        data: {
+          projectId: project.id,
+          templateId: stageTemplate.id,
+          status: 'pending',
+          isActive: stageTemplate.isDefaultActive ?? true,
+        },
+      });
+
+      createdStageId = projectStage.id;
+
+      for (const taskTemplate of stageTemplate.taskTemplates) {
+        let dueDate: Date | null = null;
+
+        if (project.targetDate && taskTemplate.defaultDueDays) {
+          dueDate = new Date(project.targetDate);
+          dueDate.setDate(dueDate.getDate() + taskTemplate.defaultDueDays);
+        }
+
+        await tx.task.create({
+          data: {
+            title: taskTemplate.title,
+            description: taskTemplate.description,
+            isMandatory: taskTemplate.isMandatory,
+            isActive: taskTemplate.isDefaultActive ?? true,
+            status: 'pending',
+            dueDate,
+            projectStageId: projectStage.id,
+            templateId: taskTemplate.id,
+          },
+        });
+      }
+    });
+
+    const refreshed = await this.findOne(projectId, resolvedCompanyId, true);
+
+    if (position?.afterStageId && refreshed.stages && createdStageId) {
+      const stageOrder = [...refreshed.stages];
+      const nextStage = stageOrder.find((stage) => stage.id === createdStageId);
+      const targetIndex = stageOrder.findIndex((stage) => stage.id === position.afterStageId);
+
+      if (nextStage && targetIndex >= 0) {
+        const filtered = stageOrder.filter((stage) => stage.id !== nextStage.id);
+        filtered.splice(targetIndex + 1, 0, nextStage);
+        return {
+          ...refreshed,
+          stages: filtered,
+        };
+      }
+    }
+
+    return refreshed;
   }
 
   /**

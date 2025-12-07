@@ -1,6 +1,5 @@
 // apps/api/src/tasks/tasks.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, TaskStatus } from './dto/task.dto';
 
@@ -43,6 +42,18 @@ export class TasksService {
     return user.id;
   }
 
+  private deriveStatusFromDates(
+    startDate?: Date | null,
+    completedDate?: Date | null,
+  ): TaskStatus {
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    if (completedDate && completedDate <= endOfToday) return TaskStatus.COMPLETED;
+    if (startDate && startDate <= endOfToday) return TaskStatus.IN_PROGRESS;
+    return TaskStatus.PENDING;
+  }
+
   /**
    * 태스크 생성
    */
@@ -56,6 +67,12 @@ export class TasksService {
         assigneeId: dto.assigneeId,
         isMandatory: dto.isMandatory || false,
         isActive: dto.isActive ?? true,
+        startDate: dto.startDate ? new Date(dto.startDate) : null,
+        completedDate: dto.completedDate ? new Date(dto.completedDate) : null,
+        status: this.deriveStatusFromDates(
+          dto.startDate ? new Date(dto.startDate) : null,
+          dto.completedDate ? new Date(dto.completedDate) : null,
+        ),
         projectStageId: dto.projectStageId,
       },
     });
@@ -63,6 +80,7 @@ export class TasksService {
     // 활동 로그 기록 (MVP #30)
     await this.createHistory(task.id, resolvedUserId, 'created', null, 'created');
 
+    await this.updateStageStatus(dto.projectStageId);
     await this.touchProjectByStage(dto.projectStageId);
 
     return task;
@@ -134,6 +152,23 @@ export class TasksService {
     if (dto.isActive !== undefined && dto.isActive !== existing.isActive) {
       changes.push(`활성 여부 변경`);
     }
+    const nextStartDate =
+      dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : existing.startDate;
+    const nextCompletedDate =
+      dto.completedDate !== undefined
+        ? dto.completedDate
+          ? new Date(dto.completedDate)
+          : null
+        : existing.completedDate;
+
+    const shouldDeriveStatus = dto.startDate !== undefined || dto.completedDate !== undefined;
+    const derivedStatus = shouldDeriveStatus
+      ? this.deriveStatusFromDates(nextStartDate, nextCompletedDate)
+      : undefined;
+
+    if (derivedStatus && derivedStatus !== existing.status) {
+      changes.push(`상태: ${this.getStatusLabel(existing.status)} → ${this.getStatusLabel(derivedStatus)}`);
+    }
 
     const task = await this.prisma.task.update({
       where: { id },
@@ -143,15 +178,22 @@ export class TasksService {
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         assigneeId: dto.assigneeId,
         isMandatory: dto.isMandatory !== undefined ? dto.isMandatory : undefined,
+        isMandatory: dto.isMandatory !== undefined ? dto.isMandatory : undefined,
         isActive: dto.isActive !== undefined ? dto.isActive : undefined,
+        startDate: dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : undefined,
+        completedDate:
+          dto.completedDate !== undefined ? (dto.completedDate ? new Date(dto.completedDate) : null) : undefined,
+        status: derivedStatus,
       },
     });
+
 
     // 변경 내역이 있으면 히스토리 기록
     if (changes.length > 0) {
       await this.createHistory(id, resolvedUserId, 'updated', null, null, changes.join(', '));
     }
 
+    await this.updateStageStatus(existing.projectStageId);
     await this.touchProjectByStage(existing.projectStageId);
 
     return task;

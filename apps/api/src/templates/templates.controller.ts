@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, Patch, Req, UseGuards } from '@nestjs/common';
+// apps/api/src/templates/templates.controller.ts
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
-
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TemplatesService } from './templates.service';
-import type { ProjectStageTemplateDto } from '../../../../packages/shared/src/types/template.types';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { Request } from 'express';
+import type { ProjectStageTemplateDto } from '@shared/types/template.types';
+
 
 @ApiTags('Templates')
 @ApiBearerAuth()
@@ -42,5 +43,22 @@ export class TemplatesController {
     const companyId = user?.companyId;
 
     return this.templatesService.updateStructure(id, payload, companyId);
+  }
+  @Post()
+  @ApiOperation({ summary: '체크리스트 템플릿 생성' })
+  async create(@Body() payload: { name: string; description?: string }, @Req() req: Request) {
+    const user: any = (req as any).user;
+    const companyId = user?.companyId;
+
+    return this.templatesService.create(payload, companyId);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: '체크리스트 템플릿 삭제 (soft delete)' })
+  async softDelete(@Param('id') id: string, @Req() req: Request) {
+    const user: any = (req as any).user;
+    const companyId = user?.companyId;
+
+    return this.templatesService.softDelete(id, companyId);
   }
 }

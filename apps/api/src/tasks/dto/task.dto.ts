@@ -24,6 +24,16 @@ export class CreateTaskDto {
   @IsDateString()
   dueDate?: string;
 
+  @ApiPropertyOptional({ description: '태스크 시작일' })
+  @IsOptional()
+  @IsDateString()
+  startDate?: string | null;
+
+  @ApiPropertyOptional({ description: '태스크 완료일' })
+  @IsOptional()
+  @IsDateString()
+  completedDate?: string | null;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -74,6 +84,16 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsString()
   assigneeId?: string;
+
+  @ApiPropertyOptional({ description: '태스크 시작일' })
+  @IsOptional()
+  @IsDateString()
+  startDate?: string | null;
+
+  @ApiPropertyOptional({ description: '태스크 완료일' })
+  @IsOptional()
+  @IsDateString()
+  completedDate?: string | null;
 }
 
 export class UpdateTaskActiveDto {

@@ -1,14 +1,14 @@
+// apps/api/src/templates/templates.service.ts
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { StageTemplate, TaskTemplate } from '@prisma/client';
-
 import { PrismaService } from '../prisma/prisma.service';
 import type {
-  ProjectStageTemplateDto,
-  StageTemplateStageDto,
-  StageTemplateTaskDto,
   TemplateDetailDto,
   TemplateListItemDto,
-} from '../../../../packages/shared/src/types/template.types';
+  StageTemplateStageDto,
+  StageTemplateTaskDto,
+  ProjectStageTemplateDto,
+} from '@shared/types/template.types';
+import type { StageTemplate, TaskTemplate } from '@prisma/client';
 
 @Injectable()
 export class TemplatesService {
@@ -108,6 +108,52 @@ export class TemplatesService {
     return this.toTemplateDetail(template);
   }
 
+  async create(payload: { name: string; description?: string }, companyId?: string): Promise<TemplateDetailDto> {
+    const resolvedCompanyId = await this.resolveCompanyId(companyId);
+
+    const lastTemplate = await this.prisma.stageTemplate.findFirst({
+      where: { companyId: resolvedCompanyId, deletedAt: null },
+      orderBy: { order: 'desc' },
+    });
+
+    const template = await this.prisma.stageTemplate.create({
+      data: {
+        companyId: resolvedCompanyId,
+        name: payload.name,
+        description: payload.description ?? null,
+        order: lastTemplate ? lastTemplate.order + 1 : 0,
+        isDefaultActive: true,
+      },
+    });
+
+    return this.toTemplateDetail({ ...template, taskTemplates: [] });
+  }
+
+  async softDelete(id: string, companyId?: string): Promise<void> {
+    const resolvedCompanyId = await this.resolveCompanyId(companyId);
+    const template = await this.prisma.stageTemplate.findFirst({
+      where: { id, companyId: resolvedCompanyId, deletedAt: null },
+    });
+
+    if (!template) {
+      throw new NotFoundException('템플릿을 찾을 수 없습니다.');
+    }
+
+    const now = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.stageTemplate.update({
+        where: { id: template.id },
+        data: { deletedAt: now },
+      });
+
+      await tx.taskTemplate.updateMany({
+        where: { stageTemplateId: template.id, deletedAt: null },
+        data: { deletedAt: now },
+      });
+    });
+  }
+
   async updateStructure(
     id: string,
     payload: ProjectStageTemplateDto,
@@ -130,7 +176,6 @@ export class TemplatesService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      // 템플릿 메타 업데이트 (현재 구조에서는 stageTemplate == stage 느낌)
       await tx.stageTemplate.update({
         where: { id: template.id },
         data: {
@@ -141,7 +186,6 @@ export class TemplatesService {
         },
       });
 
-      // 기존 태스크 조회
       const existingTasks = await tx.taskTemplate.findMany({
         where: { stageTemplateId: template.id, deletedAt: null },
       });
@@ -151,7 +195,6 @@ export class TemplatesService {
         incomingTasks.filter((task) => Boolean(task.id)).map((task) => task.id as string),
       );
 
-      // DTO에 더 이상 존재하지 않는 태스크 soft delete
       const tasksToDelete = existingTasks.filter((task) => !incomingTaskIds.has(task.id));
       if (tasksToDelete.length > 0) {
         const now = new Date();
@@ -161,7 +204,6 @@ export class TemplatesService {
         });
       }
 
-      // 새 태스크 생성 / 기존 태스크 업데이트
       for (const [index, task] of incomingTasks.entries()) {
         const order = typeof task.order === 'number' ? task.order : index;
 
@@ -196,12 +238,7 @@ export class TemplatesService {
 
     const refreshed = await this.prisma.stageTemplate.findFirst({
       where: { id: template.id },
-      include: {
-        taskTemplates: {
-          where: { deletedAt: null },
-          orderBy: { order: 'asc' },
-        },
-      },
+      include: { taskTemplates: true },
     });
 
     if (!refreshed) {

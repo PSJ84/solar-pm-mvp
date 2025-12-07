@@ -119,4 +119,22 @@ export class ProjectsController {
 
     return this.projectsService.getActivityLog(id, companyId, limit || 20);
   }
+
+  @Post(':id/stages/from-template')
+  @ApiOperation({ summary: '기존 프로젝트에 템플릿 기반 단계 추가' })
+  async addStageFromTemplate(
+    @Param('id') projectId: string,
+    @Body() body: { templateId: string; afterStageId?: string },
+    @Req() req: Request,
+  ) {
+    const user: any = (req as any).user;
+    const companyId = user?.companyId;
+
+    return this.projectsService.addStageFromTemplate(
+      projectId,
+      body.templateId,
+      { afterStageId: body.afterStageId },
+      companyId,
+    );
+  }
 }
