@@ -22,7 +22,7 @@ export class CreateTaskDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()
-  dueDate?: string;
+  dueDate?: string | null;
 
   @ApiPropertyOptional({ description: '태스크 시작일' })
   @IsOptional()
@@ -78,7 +78,7 @@ export class UpdateTaskDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()
-  dueDate?: string;
+  dueDate?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()

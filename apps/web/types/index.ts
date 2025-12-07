@@ -46,7 +46,7 @@ export interface Task {
   id: string;
   title: string;
   description?: string;
-  dueDate?: string;
+  dueDate?: string | null;
   status: TaskStatus;
   isActive?: boolean;
   isMandatory: boolean;
@@ -69,7 +69,7 @@ export interface Task {
   stage?: string;
 }
 
-export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'delayed';
+export type TaskStatus = 'pending' | 'in_progress' | 'waiting' | 'completed';
 
 export interface TaskHistory {
   id: string;
