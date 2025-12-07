@@ -44,11 +44,6 @@ export class CreateTaskDto {
   @IsString()
   assigneeId?: string;
 
-  @ApiPropertyOptional({ description: '태스크 메모' })
-  @IsOptional()
-  @IsString()
-  note?: string;
-
   @ApiPropertyOptional({ default: false })
   @IsOptional()
   @IsBoolean()
@@ -84,6 +79,11 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ description: '태스크 메모' })
+  @IsOptional()
+  @IsString()
+  note?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

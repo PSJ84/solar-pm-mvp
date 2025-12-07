@@ -224,6 +224,9 @@ enum TaskStatus {
 }
 
 model Task {
+  // NOTE: after editing schema.prisma, run:
+  // pnpm prisma migrate dev --name add_task_note
+  // pnpm prisma generate
   id              String        @id @default(cuid())
   title           String
   description     String?
