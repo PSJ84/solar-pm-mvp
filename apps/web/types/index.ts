@@ -50,6 +50,9 @@ export interface Task {
   status: TaskStatus;
   isActive?: boolean;
   isMandatory: boolean;
+  projectStageId?: string;
+  startDate?: string | null;
+  completedDate?: string | null;
   assignee?: {
     id: string;
     name: string;

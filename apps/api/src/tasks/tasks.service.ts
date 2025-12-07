@@ -1,6 +1,5 @@
 // apps/api/src/tasks/tasks.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, TaskStatus } from './dto/task.dto';
 
@@ -43,6 +42,18 @@ export class TasksService {
     return user.id;
   }
 
+  private deriveStatusFromDates(
+    startDate?: Date | null,
+    completedDate?: Date | null,
+  ): TaskStatus {
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    if (completedDate && completedDate <= endOfToday) return TaskStatus.COMPLETED;
+    if (startDate && startDate <= endOfToday) return TaskStatus.IN_PROGRESS;
+    return TaskStatus.PENDING;
+  }
+
   /**
    * 태스크 생성
    */
@@ -56,6 +67,12 @@ export class TasksService {
         assigneeId: dto.assigneeId,
         isMandatory: dto.isMandatory || false,
         isActive: dto.isActive ?? true,
+        startDate: dto.startDate ? new Date(dto.startDate) : null,
+        completedDate: dto.completedDate ? new Date(dto.completedDate) : null,
+        status: this.deriveStatusFromDates(
+          dto.startDate ? new Date(dto.startDate) : null,
+          dto.completedDate ? new Date(dto.completedDate) : null,
+        ),
         projectStageId: dto.projectStageId,
       },
     });
@@ -63,6 +80,7 @@ export class TasksService {
     // 활동 로그 기록 (MVP #30)
     await this.createHistory(task.id, resolvedUserId, 'created', null, 'created');
 
+    await this.updateStageStatus(dto.projectStageId);
     await this.touchProjectByStage(dto.projectStageId);
 
     return task;
@@ -72,8 +90,8 @@ export class TasksService {
    * 태스크 상세 조회
    */
   async findOne(id: string) {
-    const task = await this.prisma.task.findUnique({
-      where: { id },
+    const task = await this.prisma.task.findFirst({
+      where: { id, deletedAt: null },
       include: {
         assignee: {
           select: { id: true, name: true, email: true },
@@ -128,6 +146,30 @@ export class TasksService {
     if (dto.assigneeId && dto.assigneeId !== existing.assigneeId) {
       changes.push(`담당자 변경`);
     }
+    if (dto.isMandatory !== undefined && dto.isMandatory !== existing.isMandatory) {
+      changes.push(`필수 여부 변경`);
+    }
+    if (dto.isActive !== undefined && dto.isActive !== existing.isActive) {
+      changes.push(`활성 여부 변경`);
+    }
+
+    const nextStartDate =
+      dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : existing.startDate;
+    const nextCompletedDate =
+      dto.completedDate !== undefined
+        ? dto.completedDate
+          ? new Date(dto.completedDate)
+          : null
+        : existing.completedDate;
+
+    const shouldDeriveStatus = dto.startDate !== undefined || dto.completedDate !== undefined;
+    const derivedStatus = shouldDeriveStatus
+      ? this.deriveStatusFromDates(nextStartDate, nextCompletedDate)
+      : undefined;
+
+    if (derivedStatus && derivedStatus !== existing.status) {
+      changes.push(`상태: ${this.getStatusLabel(existing.status)} → ${this.getStatusLabel(derivedStatus)}`);
+    }
 
     const task = await this.prisma.task.update({
       where: { id },
@@ -136,6 +178,12 @@ export class TasksService {
         description: dto.description,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         assigneeId: dto.assigneeId,
+        isMandatory: dto.isMandatory !== undefined ? dto.isMandatory : undefined,
+        isActive: dto.isActive !== undefined ? dto.isActive : undefined,
+        startDate: dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : undefined,
+        completedDate:
+          dto.completedDate !== undefined ? (dto.completedDate ? new Date(dto.completedDate) : null) : undefined,
+        status: derivedStatus,
       },
     });
 
@@ -144,6 +192,7 @@ export class TasksService {
       await this.createHistory(id, resolvedUserId, 'updated', null, null, changes.join(', '));
     }
 
+    await this.updateStageStatus(existing.projectStageId);
     await this.touchProjectByStage(existing.projectStageId);
 
     return task;
@@ -189,10 +238,15 @@ export class TasksService {
    * 태스크 삭제
    */
   async remove(id: string, userId?: string) {
-    await this.resolveUserId(userId);
+    const resolvedUserId = await this.resolveUserId(userId);
     const existing = await this.findOne(id);
 
-    const deleted = await this.prisma.task.delete({ where: { id } });
+    const deleted = await this.prisma.task.update({
+      where: { id },
+      data: { deletedAt: new Date(), isActive: false },
+    });
+
+    await this.createHistory(id, resolvedUserId, 'deleted', existing.status, existing.status, '태스크 삭제');
 
     // 둘 다 필요: 단계 상태 갱신 + 프로젝트 최근 수정일 갱신
     await this.updateStageStatus(existing.projectStageId);
