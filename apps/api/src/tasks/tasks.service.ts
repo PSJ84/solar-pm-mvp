@@ -213,34 +213,84 @@ export class TasksService {
   }
 
   /**
-   * 태스크 상태 변경 + 히스토리 자동 기록 (MVP #30)
-   * 설계서 핵심 기능
+   * 태스크 상태 변경 + 히스토리 자동 기록
+   * - status / memo / waitingFor / dueDate / startedAt / completedAt 관리
    */
   async updateStatus(id: string, dto: UpdateTaskStatusDto, userId?: string) {
     const resolvedUserId = await this.resolveUserId(userId);
     const existing = await this.findOne(id);
-    const oldStatus = existing.status;
 
-    // MVP #20: 착공 강제 조건 체크
-    if (dto.status === TaskStatus.COMPLETED && existing.isMandatory) {
-      // 필수 태스크 완료 시 추가 검증 로직 가능
-      // TODO: 필수 문서 첨부 여부 등 체크
+    const oldStatus = existing.status as TaskStatus;
+    const newStatus = dto.status;
+    const now = new Date();
+
+    const statusChanged = oldStatus !== newStatus;
+
+    const data: any = {};
+
+    // 1) 상태
+    data.status = newStatus;
+
+    // 2) 메모
+    if (dto.memo !== undefined) {
+      data.memo = dto.memo;
+    }
+
+    // 3) 마감일 (dueDate)
+    if (dto.dueDate !== undefined) {
+      if (dto.dueDate) {
+        data.dueDate = new Date(dto.dueDate);
+      } else {
+        // null 또는 빈 문자열이면 마감일 제거
+        data.dueDate = null;
+      }
+    }
+
+    // 4) waitingFor (대기 사유)
+    if (newStatus === TaskStatus.WAITING) {
+      if (dto.waitingFor !== undefined) {
+        data.waitingFor = dto.waitingFor || null;
+      }
+      // dto.waitingFor가 undefined면 기존 값 유지
+    } else {
+      // 더 이상 대기 상태가 아니면 무조건 초기화
+      data.waitingFor = null;
+    }
+
+    // 5) startedAt / completedAt (상태가 실제로 바뀐 경우만)
+    if (statusChanged) {
+      // 처음 in_progress로 바뀔 때만 startedAt 세팅
+      if (newStatus === TaskStatus.IN_PROGRESS && !existing.startedAt) {
+        data.startedAt = now;
+      }
+
+      // completedAt 처리
+      if (newStatus === TaskStatus.COMPLETED) {
+        data.completedAt = now;
+      } else if (oldStatus === TaskStatus.COMPLETED && newStatus !== TaskStatus.COMPLETED) {
+        // 완료 → 다른 상태로 롤백되면 completedAt 비우기
+        data.completedAt = null;
+      }
     }
 
     const task = await this.prisma.task.update({
       where: { id },
-      data: { status: dto.status },
+      data,
     });
 
-    // MVP #30: 활동 로그 자동 기록
-    await this.createHistory(
-      id,
-      resolvedUserId,
-      'status_changed',
-      oldStatus,
-      dto.status,
-      dto.comment || `상태 변경: ${this.getStatusLabel(oldStatus)} → ${this.getStatusLabel(dto.status)}`,
-    );
+    // 상태가 변경된 경우에만 히스토리 기록
+    if (statusChanged) {
+      const comment = `상태 변경: ${this.getStatusLabel(oldStatus)} → ${this.getStatusLabel(newStatus)}`;
+
+      await this.createHistory(
+        id,
+        resolvedUserId,
+        'status_changed',
+        oldStatus,
+        newStatus,
+        comment,
+      );
+    }
 
     await this.updateStageStatus(existing.projectStageId);
     await this.touchProjectByStage(existing.projectStageId);
@@ -295,17 +345,18 @@ export class TasksService {
   /**
    * 상태 라벨 변환 (한글)
    */
-  private getStatusLabel(status: string | TaskStatus): string {
-    // enum / string 상관없이 문자열로 변환 후 소문자로 통일
-    const key = String(status).toLowerCase();
-
+  private getStatusLabel(status: any): string {
     const labels: Record<string, string> = {
       pending: '대기',
       in_progress: '진행중',
+      waiting: '대기중',
       completed: '완료',
-      delayed: '지연',
     };
-    return labels[key] || key;
+
+    if (!status) return '대기';
+
+    const key = typeof status === 'string' ? status : String(status);
+    return labels[key] ?? key;
   }
 
   /**
