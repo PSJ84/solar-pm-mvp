@@ -1,355 +1,100 @@
-// apps/web/app/templates/[id]/page.tsx
+// apps/web/app/templates/page.tsx
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowDown,
-  ArrowUp,
-  CalendarClock,
-  ChevronLeft,
-  CircleDot,
-  ListChecks,
-  Loader2,
-  Plus,
-  Trash2,
-} from 'lucide-react';
-
+import { CalendarClock, ChevronRight, Layers, ListChecks, Plus, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { templatesApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
+import type { TemplateListItemDto } from '@shared/types/template.types';
 
-// NOTE: shared 타입은 monorepo의 packages/shared 에 있음
-import type {
-  TemplateDetailDto,
-  StageTemplateStageDto,
-  StageTemplateTaskDto,
-  ProjectStageTemplateDto,
-} from '../../../../../packages/shared/src/types/template.types';
+const TemplateCardSkeleton = () => (
+  <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col gap-3 animate-pulse">
+    <div className="h-5 bg-slate-200 rounded w-2/3" />
+    <div className="h-4 bg-slate-200 rounded w-full" />
+    <div className="flex items-center gap-3 text-sm text-slate-500">
+      <div className="h-4 bg-slate-200 rounded w-24" />
+      <div className="h-4 bg-slate-200 rounded w-28" />
+    </div>
+  </div>
+);
 
-type ToastState = {
-  message: string;
-  type?: 'error' | 'info' | 'success';
-};
-
-const Badge = ({
-  label,
-  tone = 'slate',
-}: {
-  label: string;
-  tone?: 'slate' | 'blue' | 'amber' | 'emerald';
-}) => {
-  const toneStyles: Record<string, string> = {
-    slate: 'bg-slate-100 text-slate-700',
-    blue: 'bg-blue-50 text-blue-700 border border-blue-100',
-    amber: 'bg-amber-50 text-amber-700 border border-amber-100',
-    emerald: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
-  };
-
-  return (
-    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${toneStyles[tone] || toneStyles.slate}`}>
-      {label}
-    </span>
-  );
-};
-
-export default function TemplateDetailPage() {
-  const params = useParams<{ id?: string | string[] }>();
-  const idValue = params?.id;
-  const templateId = Array.isArray(idValue) ? idValue[0] : idValue ? String(idValue) : '';
-  const hasTemplateId = Boolean(templateId);
-
+export default function TemplatesPage() {
   const queryClient = useQueryClient();
-
-  const [templateName, setTemplateName] = useState<string>('');
-  const [templateDescription, setTemplateDescription] = useState<string>('');
-  const [stages, setStages] = useState<StageTemplateStageDto[]>([]);
-  const [toast, setToast] = useState<ToastState | null>(null);
-  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const showToast = (
-    message: string,
-    type: 'error' | 'info' | 'success' = 'info',
-    duration = 3000,
-  ) => {
-    if (toastTimeoutRef.current) {
-      clearTimeout(toastTimeoutRef.current);
-    }
-    setToast({ message, type });
-    toastTimeoutRef.current = setTimeout(() => setToast(null), duration);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (toastTimeoutRef.current) {
-        clearTimeout(toastTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const {
-    data,
-    isLoading,
-    isError,
-    refetch,
-  } = useQuery<TemplateDetailDto>({
-    queryKey: ['template', templateId],
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [templateDescription, setTemplateDescription] = useState('');
+  const { data, isLoading, isError, refetch } = useQuery<TemplateListItemDto[]>({
+    queryKey: ['templates'],
     queryFn: async () => {
-      const res = await templatesApi.getOne(templateId);
+      const res = await templatesApi.getAll();
       return res.data;
     },
-    enabled: hasTemplateId,
   });
 
-  // API 데이터 들어오면 로컬 상태 세팅
-  useEffect(() => {
-    if (data) {
-      setTemplateName(data.name || '');
-      setTemplateDescription(data.description || '');
-      setStages(
-        data.stages.map((stage) => ({
-          ...stage,
-          tasks: stage.tasks ? [...stage.tasks] : [],
-        })),
-      );
-    }
-  }, [data]);
-
-  const moveTask = (stageIndex: number, taskIndex: number, direction: 'up' | 'down') => {
-    setStages((prev) =>
-      prev.map((stage, sIdx) => {
-        if (sIdx !== stageIndex) return stage;
-
-        const newTasks = [...stage.tasks];
-        const targetIndex = direction === 'up' ? taskIndex - 1 : taskIndex + 1;
-
-        if (targetIndex < 0 || targetIndex >= newTasks.length) return stage;
-
-        const [task] = newTasks.splice(taskIndex, 1);
-        newTasks.splice(targetIndex, 0, task);
-
-        return {
-          ...stage,
-          tasks: newTasks.map((taskItem, idx) => ({ ...taskItem, order: idx })),
-        };
-      }),
-    );
-  };
-
-  const updateTaskField = (
-    stageIndex: number,
-    taskIndex: number,
-    field: keyof StageTemplateTaskDto,
-    value: string | boolean,
-  ) => {
-    setStages((prev) =>
-      prev.map((stage, sIdx) => {
-        if (sIdx !== stageIndex) return stage;
-
-        const tasks = stage.tasks.map((task, tIdx) =>
-          tIdx === taskIndex ? { ...task, [field]: value } : task,
-        );
-
-        return { ...stage, tasks };
-      }),
-    );
-  };
-
-  const addTask = (stageIndex: number) => {
-    setStages((prev) =>
-      prev.map((stage, sIdx) => {
-        if (sIdx !== stageIndex) return stage;
-
-        const newTask: StageTemplateTaskDto = {
-          id: `temp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          name: '새 태스크',
-          isMandatory: false,
-          isDefaultActive: true,
-          order: stage.tasks.length,
-        };
-
-        return { ...stage, tasks: [...stage.tasks, newTask] };
-      }),
-    );
-  };
-
-  const removeTask = (stageIndex: number, taskIndex: number) => {
-    setStages((prev) =>
-      prev.map((stage, sIdx) => {
-        if (sIdx !== stageIndex) return stage;
-
-        const newTasks = stage.tasks
-          .filter((_, idx) => idx !== taskIndex)
-          .map((task, idx) => ({ ...task, order: idx }));
-
-        return { ...stage, tasks: newTasks };
-      }),
-    );
-  };
-
-  // 서버로 보낼 때는 stage / task 순서를 인덱스로 재정규화
-  const normalizedStages: StageTemplateStageDto[] = useMemo(
-    () =>
-      stages.map((stage, stageIndex) => ({
-        ...stage,
-        order: stageIndex,
-        tasks: stage.tasks.map((task, taskIndex) => ({
-          ...task,
-          order: taskIndex,
-        })),
-      })),
-    [stages],
-  );
-
-  const { mutate: saveTemplate, isPending: isSaving } = useMutation({
-    mutationFn: async () => {
-      if (!templateName.trim()) {
-        throw new Error('템플릿 이름을 입력해주세요.');
-      }
-
-      const payload: ProjectStageTemplateDto = {
-        id: templateId,
-        name: templateName.trim(),
-        description: templateDescription.trim() || undefined,
-        isDefault: data?.isDefault ?? false,
-        stages: normalizedStages,
-      };
-
-      const res = await templatesApi.updateStructure(templateId, payload);
-      return res.data as TemplateDetailDto;
+  const createTemplate = useMutation({
+    mutationFn: async (payload: { name: string; description?: string }) => {
+      const res = await templatesApi.create(payload);
+      return res.data;
     },
-    onSuccess: (updated) => {
-      queryClient.setQueryData(['template', templateId], updated);
-      setTemplateName(updated.name || '');
-      setTemplateDescription(updated.description || '');
-      setStages(
-        updated.stages.map((stage) => ({
-          ...stage,
-          tasks: stage.tasks ? [...stage.tasks] : [],
-        })),
-      );
-      showToast('템플릿이 저장되었습니다.', 'success');
+    onSuccess: () => {
+      setTemplateName('');
+      setTemplateDescription('');
+      setIsModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['templates'] });
     },
-    onError: (error: unknown) => {
-      const message =
-        error instanceof Error ? error.message : '저장 중 오류가 발생했습니다.';
-      showToast(message, 'error');
+    onError: () => {
+      alert('템플릿 생성에 실패했습니다.');
     },
   });
 
-  // 🔧 여기서 stage 길이를 인자로 받아서 사용
-  const renderTaskRow = (
-    stageIndex: number,
-    task: StageTemplateTaskDto,
-    taskIndex: number,
-    tasksLength: number,
-  ) => (
-    <div
-      key={task.id}
-      className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg bg-white"
-    >
-      <CircleDot className="h-4 w-4 text-slate-500 mt-1" />
-      <div className="flex-1 space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            className="w-full md:w-auto min-w-[200px] flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
-            value={task.name}
-            onChange={(e) => updateTaskField(stageIndex, taskIndex, 'name', e.target.value)}
-          />
-          {task.isMandatory && <Badge label="필수" tone="amber" />}
-          {task.isDefaultActive === false ? (
-            <Badge label="기본 비활성" tone="slate" />
-          ) : (
-            <Badge label="기본 활성" tone="emerald" />
-          )}
-          {typeof task.defaultDueDays === 'number' && (
-            <Badge label={`기본 마감 : +${task.defaultDueDays}일`} tone="blue" />
-          )}
-        </div>
+  const deleteTemplate = useMutation({
+    mutationFn: async (id: string) => templatesApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['templates'] });
+    },
+    onError: () => {
+      alert('템플릿 삭제에 실패했습니다.');
+    },
+  });
 
-        {task.description && (
-          <p className="text-sm text-slate-600">{task.description}</p>
-        )}
-
-        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
-          <label className="inline-flex items-center gap-1">
-            <input
-              type="checkbox"
-              checked={task.isMandatory}
-              onChange={(e) =>
-                updateTaskField(stageIndex, taskIndex, 'isMandatory', e.target.checked)
-              }
-            />
-            <span>필수</span>
-          </label>
-          <label className="inline-flex items-center gap-1">
-            <input
-              type="checkbox"
-              checked={task.isDefaultActive !== false}
-              onChange={(e) =>
-                updateTaskField(stageIndex, taskIndex, 'isDefaultActive', e.target.checked)
-              }
-            />
-            <span>기본 활성</span>
-          </label>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <button
-          type="button"
-          className="p-2 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-          onClick={() => moveTask(stageIndex, taskIndex, 'up')}
-          disabled={taskIndex === 0}
-        >
-          <ArrowUp className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          className="p-2 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-          onClick={() => moveTask(stageIndex, taskIndex, 'down')}
-          disabled={taskIndex === tasksLength - 1}
-        >
-          <ArrowDown className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          className="p-2 rounded-md border border-red-200 text-red-600 hover:bg-red-50"
-          onClick={() => removeTask(stageIndex, taskIndex)}
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
-  );
+  const handleDeleteTemplate = (id: string) => {
+    const confirmed = window.confirm('선택한 템플릿을 삭제하시겠습니까?');
+    if (!confirmed) return;
+    deleteTemplate.mutate(id);
+  };
 
   return (
     <AppShell>
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/templates"
-            className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900"
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">체크리스트 템플릿 관리</h1>
+            <p className="text-slate-600 mt-1">프로젝트 생성 시 사용할 체크리스트 템플릿들을 관리합니다.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
-            <ChevronLeft className="h-4 w-4" />
-            목록으로
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900">체크리스트 템플릿 상세</h1>
+            <Plus className="h-4 w-4" />
+            <span>새 템플릿 추가</span>
+          </button>
         </div>
 
         {isLoading && (
-          <div className="bg-white border border-slate-200 rounded-xl p-6 text-slate-600">
-            불러오는 중…
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <TemplateCardSkeleton key={`template-skeleton-${idx}`} />
+            ))}
           </div>
         )}
 
         {isError && (
           <div className="bg-white border border-red-200 rounded-xl p-6 text-slate-700">
-            <p className="font-medium text-red-700">
-              템플릿 정보를 불러오는 중 오류가 발생했습니다.
-            </p>
+            <p className="font-medium text-red-700">템플릿 정보를 불러오는 중 오류가 발생했습니다.</p>
             <button
               type="button"
               onClick={() => refetch()}
@@ -360,136 +105,124 @@ export default function TemplateDetailPage() {
           </div>
         )}
 
-        {!isLoading && !isError && data && (
-          <div className="space-y-6">
-            {/* 상단 기본 정보 카드 */}
-            <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex-1 min-w-[200px]">
-                  <label className="text-sm font-medium text-slate-700">
-                    템플릿 이름
-                  </label>
-                  <input
-                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-base focus:border-slate-400 focus:outline-none"
-                    value={templateName}
-                    onChange={(e) => setTemplateName(e.target.value)}
-                    placeholder="템플릿 이름을 입력하세요"
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {data.isDefault && <Badge label="기본 템플릿" tone="blue" />}
-                  <Badge
-                    label={`단계 ${data.stageCount}개 · 태스크 ${data.taskCount}개`}
-                    tone="slate"
-                  />
-                </div>
+        {!isLoading && !isError && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {(data || []).length === 0 && (
+              <div className="col-span-full bg-white border border-slate-200 rounded-xl p-6 text-slate-600">
+                등록된 템플릿이 없습니다. 기본 템플릿을 추가해 주세요.
               </div>
+            )}
 
-              <div>
-                <label className="text-sm font-medium text-slate-700">설명</label>
-                <textarea
-                  className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-slate-400 focus:outline-none"
-                  rows={3}
-                  value={templateDescription}
-                  onChange={(e) => setTemplateDescription(e.target.value)}
-                  placeholder="템플릿에 대한 설명을 입력하세요"
-                />
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                <div className="flex items-center gap-1">
-                  <CalendarClock className="h-4 w-4 text-slate-500" />
-                  <span>최종 수정 {formatDate(data.updatedAt, 'PPP')}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 단계 / 태스크 구조 */}
-            <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-6">
-              <div className="flex items-center gap-2">
-                <ListChecks className="h-5 w-5 text-slate-500" />
-                <span className="text-lg font-semibold text-slate-900">
-                  단계 / 태스크 구조
-                </span>
-              </div>
-
-              <div className="space-y-6">
-                {stages.map((stage, stageIndex) => (
-                  <div
-                    key={stage.id || `stage-${stageIndex}`}
-                    className="space-y-3"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-semibold text-slate-900">
-                        {stage.name}
-                      </h3>
-                      <Badge label="필수" tone="amber" />
-                      {stage.isDefaultActive === false ? (
-                        <Badge label="기본 비활성" tone="slate" />
-                      ) : (
-                        <Badge label="기본 활성" tone="emerald" />
+            {(data || []).map((template) => (
+              <div key={template.id} className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDeleteTemplate(template.id);
+                  }}
+                  className="absolute top-3 right-3 p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                  aria-label={`${template.name} 삭제`}
+                  disabled={deleteTemplate.isPending}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <Link
+                  href={`/templates/${template.id}`}
+                  className="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-300 hover:shadow-sm transition flex flex-col gap-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900">{template.name}</h3>
+                      {template.description && (
+                        <p className="text-slate-600 text-sm mt-1 line-clamp-2">{template.description}</p>
                       )}
                     </div>
-
-                    {stage.description && (
-                      <p className="text-sm text-slate-600">
-                        {stage.description}
-                      </p>
-                    )}
-
-                    <div className="space-y-2">
-                      {stage.tasks.map((task, taskIndex) =>
-                        renderTaskRow(
-                          stageIndex,
-                          task,
-                          taskIndex,
-                          stage.tasks.length,
-                        ),
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => addTask(stageIndex)}
-                      className="inline-flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50"
-                    >
-                      <Plus className="h-4 w-4" />
-                      태스크 추가
-                    </button>
+                    <ChevronRight className="h-5 w-5 text-slate-400" />
                   </div>
-                ))}
+
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                    <div className="flex items-center gap-1">
+                      <Layers className="h-4 w-4 text-slate-500" />
+                      <span>단계 {template.stageCount}개</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <ListChecks className="h-4 w-4 text-slate-500" />
+                      <span>태스크 {template.taskCount}개</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <CalendarClock className="h-4 w-4 text-slate-500" />
+                      <span>{formatDate(template.updatedAt, 'PPP')}</span>
+                    </div>
+                    {template.isDefault && (
+                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                        기본 템플릿
+                      </span>
+                    )}
+                  </div>
+                </Link>
               </div>
-            </div>
-
-            {/* 저장 버튼 */}
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => saveTemplate()}
-                disabled={isSaving}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-70"
-              >
-                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                저장
-              </button>
-            </div>
-          </div>
-        )}
-
-        {toast && (
-          <div
-            className={`fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-lg text-sm font-medium text-white transition-opacity ${
-              toast.type === 'error'
-                ? 'bg-red-600'
-                : toast.type === 'success'
-                  ? 'bg-emerald-600'
-                  : 'bg-slate-800'
-            }`}
-          >
-            {toast.message}
+            ))}
           </div>
         )}
       </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <div className="space-y-1">
+              <h3 className="text-lg font-semibold text-slate-900">새 템플릿 추가</h3>
+              <p className="text-sm text-slate-600">템플릿 이름과 설명을 입력하세요.</p>
+            </div>
+            <div className="space-y-3">
+              <label className="block text-sm text-slate-700 space-y-1">
+                <span>템플릿 이름</span>
+                <input
+                  type="text"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="예: 사업타당성 검토"
+                />
+              </label>
+              <label className="block text-sm text-slate-700 space-y-1">
+                <span>설명 (선택)</span>
+                <textarea
+                  value={templateDescription}
+                  onChange={(e) => setTemplateDescription(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  rows={3}
+                  placeholder="프로젝트 생성 시 사용할 체크리스트 설명"
+                />
+              </label>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setTemplateName('');
+                  setTemplateDescription('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={!templateName.trim() || createTemplate.isPending}
+                onClick={() =>
+                  createTemplate.mutate({ name: templateName.trim(), description: templateDescription.trim() || undefined })
+                }
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {createTemplate.isPending ? '생성 중...' : '생성'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

@@ -92,9 +92,7 @@ export class ProjectsService {
    * 회사별 프로젝트 목록 조회
    */
   async findAll(companyId?: string) {
-    const where = companyId
-      ? { companyId, deletedAt: null }
-      : { deletedAt: null };
+    const where = companyId ? { companyId, deletedAt: null } : { deletedAt: null };
 
     const projects = await this.prisma.project.findMany({
       where,
@@ -123,9 +121,8 @@ export class ProjectsService {
         (s.tasks || []).filter((t) => t.isActive !== false),
       );
       const completedTasks = allTasks.filter((t) => t.status === 'completed');
-      const progress = allTasks.length > 0
-        ? Math.round((completedTasks.length / allTasks.length) * 100)
-        : 0;
+      const progress =
+        allTasks.length > 0 ? Math.round((completedTasks.length / allTasks.length) * 100) : 0;
 
       return {
         id: project.id,
@@ -159,9 +156,7 @@ export class ProjectsService {
       where,
       include: {
         stages: {
-          where: includeInactive
-            ? { deletedAt: null }
-            : { deletedAt: null, isActive: true },
+          where: includeInactive ? { deletedAt: null } : { deletedAt: null, isActive: true },
           include: {
             template: true,
             tasks: {
@@ -184,10 +179,7 @@ export class ProjectsService {
         shareLinks: {
           where: {
             deletedAt: null,
-            OR: [
-              { expiresAt: null },
-              { expiresAt: { gt: new Date() } },
-            ],
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
           },
         },
       },
@@ -203,9 +195,8 @@ export class ProjectsService {
       (s.tasks || []).filter((t) => t.isActive !== false),
     );
     const completedTasks = allTasks.filter((t) => t.status === 'completed');
-    const progress = allTasks.length > 0
-      ? Math.round((completedTasks.length / allTasks.length) * 100)
-      : 0;
+    const progress =
+      allTasks.length > 0 ? Math.round((completedTasks.length / allTasks.length) * 100) : 0;
 
     return {
       ...project,
@@ -233,7 +224,9 @@ export class ProjectsService {
         // [v1.1] 새로 추가된 필드들
         permitNumber: dto.permitNumber,
         inspectionDate: dto.inspectionDate ? new Date(dto.inspectionDate) : undefined,
-        constructionStartAt: dto.constructionStartAt ? new Date(dto.constructionStartAt) : undefined,
+        constructionStartAt: dto.constructionStartAt
+          ? new Date(dto.constructionStartAt)
+          : undefined,
         externalId: dto.externalId,
         tags: dto.tags,
       },
@@ -263,6 +256,26 @@ export class ProjectsService {
 
     if (!stageTemplate) {
       throw new NotFoundException('템플릿을 찾을 수 없습니다.');
+    }
+
+    /**
+     * [중요] 이미 같은 템플릿으로 생성된 단계가 있으면
+     * 새로 만들지 말고 그냥 전체 프로젝트 정보를 반환
+     * (projectId + templateId 유니크 제약 에러 방지)
+     */
+    const existingProjectStage = await this.prisma.projectStage.findUnique({
+      where: {
+        // schema.prisma 에서 @@unique([projectId, templateId]) 로 선언된 복합 키
+        projectId_templateId: {
+          projectId: project.id,
+          templateId: stageTemplate.id,
+        },
+      },
+    });
+
+    if (existingProjectStage) {
+      // 이미 붙어 있는 템플릿이므로, 현재 프로젝트 상태만 리턴
+      return this.findOne(projectId, resolvedCompanyId, true);
     }
 
     let createdStageId: string | null = null;
