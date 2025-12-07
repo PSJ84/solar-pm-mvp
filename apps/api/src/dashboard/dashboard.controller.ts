@@ -1,15 +1,39 @@
 // apps/api/src/dashboard/dashboard.controller.ts
-import { Controller, Get, Query, Req } from '@nestjs/common';
+import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { Request } from 'express';
 import { DashboardService } from './dashboard.service';
 import { DashboardSummaryDto } from './dto/dashboard-summary.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { MyWorkTab } from './dto/my-work.dto';
 
 @ApiTags('Dashboard')
 @ApiBearerAuth()
 @Controller('dashboard')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
+
+  @Get('my-work')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: '내 작업(My Work) 태스크 조회' })
+  @ApiQuery({
+    name: 'tab',
+    required: false,
+    description: 'today | in_progress | waiting | overdue',
+  })
+  async getMyWork(@Req() req: Request, @Query('tab') tab?: string) {
+    const user: any = (req as any).user;
+    const userId = user?.id;
+    const companyId = user?.companyId;
+
+    const normalizedTab: MyWorkTab = ['today', 'in_progress', 'waiting', 'overdue'].includes(
+      tab as MyWorkTab,
+    )
+      ? (tab as MyWorkTab)
+      : 'today';
+
+    return this.dashboardService.getMyWork({ userId, companyId, tab: normalizedTab });
+  }
 
   /**
    * [v1.1] 통합 대시보드 Summary API
