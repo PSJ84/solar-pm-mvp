@@ -220,6 +220,8 @@ export class TasksService {
     const resolvedUserId = await this.resolveUserId(userId);
     const existing = await this.findOne(id);
     const oldStatus = existing.status;
+    const now = new Date();
+    const statusChanged = dto.status !== oldStatus;
 
     // MVP #20: 착공 강제 조건 체크
     if (dto.status === TaskStatus.COMPLETED && existing.isMandatory) {
@@ -227,20 +229,52 @@ export class TasksService {
       // TODO: 필수 문서 첨부 여부 등 체크
     }
 
+    const data: any = { status: dto.status };
+
+    if (dto.memo !== undefined) {
+      data.memo = dto.memo;
+    }
+
+    if (dto.dueDate !== undefined) {
+      data.dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+    }
+
+    if (dto.status === TaskStatus.WAITING) {
+      if (dto.waitingFor !== undefined) {
+        data.waitingFor = dto.waitingFor || null;
+      }
+    } else {
+      data.waitingFor = null;
+    }
+
+    if (statusChanged) {
+      if (dto.status === TaskStatus.IN_PROGRESS && !existing.startedAt) {
+        data.startedAt = now;
+      }
+
+      if (dto.status === TaskStatus.COMPLETED) {
+        data.completedAt = now;
+      } else if (oldStatus === TaskStatus.COMPLETED && dto.status !== TaskStatus.COMPLETED) {
+        data.completedAt = null;
+      }
+    }
+
     const task = await this.prisma.task.update({
       where: { id },
-      data: { status: dto.status },
+      data,
     });
 
     // MVP #30: 활동 로그 자동 기록
-    await this.createHistory(
-      id,
-      resolvedUserId,
-      'status_changed',
-      oldStatus,
-      dto.status,
-      dto.comment || `상태 변경: ${this.getStatusLabel(oldStatus)} → ${this.getStatusLabel(dto.status)}`,
-    );
+    if (statusChanged) {
+      await this.createHistory(
+        id,
+        resolvedUserId,
+        'status_changed',
+        oldStatus,
+        dto.status,
+        dto.memo || `상태 변경: ${this.getStatusLabel(oldStatus)} → ${this.getStatusLabel(dto.status)}`,
+      );
+    }
 
     await this.updateStageStatus(existing.projectStageId);
     await this.touchProjectByStage(existing.projectStageId);
@@ -295,17 +329,18 @@ export class TasksService {
   /**
    * 상태 라벨 변환 (한글)
    */
-  private getStatusLabel(status: string | TaskStatus): string {
-    // enum / string 상관없이 문자열로 변환 후 소문자로 통일
-    const key = String(status).toLowerCase();
-
-    const labels: Record<string, string> = {
+  private getStatusLabel(status: TaskStatus | string | null | undefined): string {
+    const map: Record<string, string> = {
       pending: '대기',
       in_progress: '진행중',
+      waiting: '대기중',
       completed: '완료',
-      delayed: '지연',
     };
-    return labels[key] || key;
+
+    if (!status) return '대기';
+
+    const key = typeof status === 'string' ? status : status.toString();
+    return map[key] ?? key;
   }
 
   /**
