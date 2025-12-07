@@ -8,7 +8,6 @@ import {
   Share2,
   MapPin,
   Zap,
-  Calendar,
   CheckCircle2,
   Circle,
   Clock,
@@ -358,7 +357,7 @@ export default function ProjectDetailPage() {
     }: {
       taskId: string;
       stageId: string;
-      data: Partial<Pick<Task, 'title' | 'isMandatory' | 'isActive' | 'startDate' | 'completedDate'>>;
+      data: Partial<Pick<Task, 'title' | 'isActive' | 'startDate' | 'completedDate' | 'dueDate'>>;
     }) => {
       const response = await tasksApi.update(taskId, data);
       return response.data;
@@ -579,12 +578,11 @@ export default function ProjectDetailPage() {
     updateTaskFields({ taskId: task.id, stageId: activeStage.id, data: { isActive: !(task.isActive !== false) } });
   };
 
-  const handleTaskMandatoryToggle = (task: Task) => {
-    if (!task?.id || !activeStage?.id) return;
-    updateTaskFields({ taskId: task.id, stageId: activeStage.id, data: { isMandatory: !task.isMandatory } });
-  };
-
-  const handleTaskDateChange = (task: Task, field: 'startDate' | 'completedDate', value: string) => {
+  const handleTaskDateChange = (
+    task: Task,
+    field: 'startDate' | 'completedDate' | 'dueDate',
+    value: string,
+  ) => {
     if (!task?.id || !activeStage?.id) return;
 
     updateTaskFields({
@@ -968,16 +966,6 @@ export default function ProjectDetailPage() {
                             <label className="inline-flex items-center gap-2">
                               <input
                                 type="checkbox"
-                                checked={task.isMandatory}
-                                onChange={() => handleTaskMandatoryToggle(task)}
-                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                disabled={isSavingTaskFields}
-                              />
-                              <span>필수</span>
-                            </label>
-                            <label className="inline-flex items-center gap-2">
-                              <input
-                                type="checkbox"
                                 checked={isTaskActive}
                                 onChange={() => handleTaskActiveToggle(task)}
                                 className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
@@ -985,18 +973,18 @@ export default function ProjectDetailPage() {
                               />
                               <span>활성</span>
                             </label>
-                            {task.dueDate && (
-                              <span className="flex items-center gap-1 text-xs text-slate-500">
-                                <Calendar className="h-3.5 w-3.5" />
-                                {new Date(task.dueDate).toLocaleDateString('ko-KR')}
-                              </span>
-                            )}
-                            {task.assignee?.name && (
-                              <span className="text-xs text-slate-500">담당: {task.assignee.name}</span>
-                            )}
                           </div>
 
                           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-2">
+                            <label className="flex items-center gap-2">
+                              <span>기한</span>
+                              <input
+                                type="date"
+                                value={normalizeDateInput(task.dueDate)}
+                                onChange={(e) => handleTaskDateChange(task, 'dueDate', e.target.value)}
+                                className="rounded border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            </label>
                             <label className="flex items-center gap-2">
                               <span>시작일</span>
                               <input
