@@ -215,39 +215,52 @@ model ProjectStage {
 }
 
 // MVP #2, #6, #20, #30: 태스크 관리
+enum TaskStatus {
+  pending
+  in_progress
+  waiting
+  completed
+  delayed
+}
+
 model Task {
   id              String        @id @default(cuid())
   title           String
   description     String?
-  
+
+  status               TaskStatus   @default(pending) // task state (To-Do status)
+  memo                 String?      // short "current state" memo
+  waitingFor           String?      // what/who we are waiting for (when status = waiting)
   // MVP #6: 오늘 마감 위젯 연동
-  dueDate         DateTime?
-  startDate       DateTime?
-  completedDate   DateTime?
-  status          String        @default("pending") // pending, in_progress, completed, delayed
-  isActive        Boolean       @default(true)
+  dueDate              DateTime?    // official due date (used for My Work D-Day)
+  startDate            DateTime?
+  completedDate        DateTime?
+  startedAt            DateTime?
+  completedAt          DateTime?
+  lastStatusChangedAt  DateTime     @default(now())
+  isActive             Boolean      @default(true)
 
   // MVP #20: 착공 강제 조건
   isMandatory     Boolean       @default(false)
-  
+
   // MVP #2: 담당자 배정
   assigneeId      String?
   assignee        User?         @relation("Assignee", fields: [assigneeId], references: [id])
-  
+
   projectStageId  String
   projectStage    ProjectStage  @relation(fields: [projectStageId], references: [id], onDelete: Cascade)
-  
+
   templateId      String?       // 원본 템플릿 참조 (선택적)
-  
+
   // [v1.1] 공통 필드
   tags            String[]  @default([]) // ["긴급", "대기", "검토필요"] 등
   deletedAt       DateTime?     // Soft delete
-  
+
   // Relations
   histories       TaskHistory[] // MVP #30: 활동 로그
   photos          Photo[]       // MVP #5: 현장 사진
   documents       Document[]
-  
+
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -255,6 +268,7 @@ model Task {
   @@index([assigneeId])
   @@index([dueDate])
   @@index([status])
+  @@index([status, dueDate])
   @@index([deletedAt])
   @@map("tasks")
 }

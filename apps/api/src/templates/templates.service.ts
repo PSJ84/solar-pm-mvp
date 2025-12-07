@@ -1,14 +1,24 @@
 // apps/api/src/templates/templates.service.ts
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import type {
-  TemplateDetailDto,
-  TemplateListItemDto,
-  StageTemplateStageDto,
-  StageTemplateTaskDto,
-  ProjectStageTemplateDto,
-} from '@shared/types/template.types';
+// Codex가 사용하던 공유 타입 경로가 실제로는 없어서 TS 에러가 남
+// 나중에 packages/shared 쪽으로 타입 분리할 때 다시 정리하면 되고,
+// 지금은 런타임 동작이 우선이라 임시로 any 타입으로 정의해서 막는다.
+// import type {
+//   TemplateDetailDto,
+//   TemplateListItemDto,
+//   StageTemplateStageDto,
+//   StageTemplateTaskDto,
+//   ProjectStageTemplateDto,
+// } from '@shared/types/template.types';
 import type { StageTemplate, TaskTemplate } from '@prisma/client';
+
+// ===== 임시 타입 정의 (MVP용, 나중에 실제 타입으로 교체해도 됨) =====
+type TemplateDetailDto = any;
+type TemplateListItemDto = any;
+type StageTemplateStageDto = any;
+type StageTemplateTaskDto = any;
+type ProjectStageTemplateDto = any;
 
 @Injectable()
 export class TemplatesService {
@@ -176,6 +186,7 @@ export class TemplatesService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      // 1) 단계 기본 정보 업데이트
       await tx.stageTemplate.update({
         where: { id: template.id },
         data: {
@@ -186,28 +197,40 @@ export class TemplatesService {
         },
       });
 
+      // 2) 기존 태스크 / 들어온 태스크 비교
       const existingTasks = await tx.taskTemplate.findMany({
         where: { stageTemplateId: template.id, deletedAt: null },
       });
 
+      const existingTaskMap = new Map(existingTasks.map((t) => [t.id, t]));
+
       const incomingTasks = stagePayload.tasks || [];
-      const incomingTaskIds = new Set(
-        incomingTasks.filter((task) => Boolean(task.id)).map((task) => task.id as string),
+
+      // DB에 실제로 존재하는 태스크 id 집합만 사용
+      const incomingExistingIds = new Set(
+        incomingTasks
+          .map((task) => task.id)
+          .filter((id): id is string => !!id && existingTaskMap.has(id)),
       );
 
-      const tasksToDelete = existingTasks.filter((task) => !incomingTaskIds.has(task.id));
+      // 3) payload에 없는 기존 태스크는 soft delete
+      const tasksToDelete = existingTasks.filter((task) => !incomingExistingIds.has(task.id));
       if (tasksToDelete.length > 0) {
         const now = new Date();
         await tx.taskTemplate.updateMany({
-          where: { id: { in: tasksToDelete.map((task) => task.id) } },
+          where: { id: { in: tasksToDelete.map((t) => t.id) } },
           data: { deletedAt: now },
         });
       }
 
+      // 4) 나머지 태스크들 upsert (실제 id는 update, 나머지는 create)
       for (const [index, task] of incomingTasks.entries()) {
         const order = typeof task.order === 'number' ? task.order : index;
 
-        if (task.id) {
+        const isExisting = !!task.id && existingTaskMap.has(task.id);
+
+        if (isExisting && task.id) {
+          // ✅ DB에 있는 태스크 → update
           await tx.taskTemplate.update({
             where: { id: task.id },
             data: {
@@ -215,19 +238,22 @@ export class TemplatesService {
               description: task.description ?? null,
               isMandatory: task.isMandatory,
               isDefaultActive: task.isDefaultActive ?? true,
-              defaultDueDays: typeof task.defaultDueDays === 'number' ? task.defaultDueDays : null,
+              defaultDueDays:
+                typeof task.defaultDueDays === 'number' ? task.defaultDueDays : null,
               order,
               deletedAt: null,
             },
           });
         } else {
+          // ✅ 새 태스크(temp-... 포함) → create
           await tx.taskTemplate.create({
             data: {
               title: task.name,
               description: task.description ?? null,
               isMandatory: task.isMandatory,
               isDefaultActive: task.isDefaultActive ?? true,
-              defaultDueDays: typeof task.defaultDueDays === 'number' ? task.defaultDueDays : null,
+              defaultDueDays:
+                typeof task.defaultDueDays === 'number' ? task.defaultDueDays : null,
               order,
               stageTemplateId: template.id,
             },

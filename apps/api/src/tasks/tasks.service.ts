@@ -295,14 +295,17 @@ export class TasksService {
   /**
    * 상태 라벨 변환 (한글)
    */
-  private getStatusLabel(status: string): string {
+  private getStatusLabel(status: string | TaskStatus): string {
+    // enum / string 상관없이 문자열로 변환 후 소문자로 통일
+    const key = String(status).toLowerCase();
+
     const labels: Record<string, string> = {
       pending: '대기',
       in_progress: '진행중',
       completed: '완료',
       delayed: '지연',
     };
-    return labels[status] || status;
+    return labels[key] || key;
   }
 
   /**
