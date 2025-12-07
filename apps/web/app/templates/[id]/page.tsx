@@ -16,17 +16,31 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
+
 import { AppShell } from '@/components/layout/AppShell';
 import { templatesApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
+
+// NOTE: shared 타입은 monorepo의 packages/shared 에 있음
 import type {
   TemplateDetailDto,
   StageTemplateStageDto,
   StageTemplateTaskDto,
   ProjectStageTemplateDto,
-} from '@shared/types/template.types';
+} from '../../../../../packages/shared/src/types/template.types';
 
-const Badge = ({ label, tone = 'slate' }: { label: string; tone?: 'slate' | 'blue' | 'amber' | 'emerald' }) => {
+type ToastState = {
+  message: string;
+  type?: 'error' | 'info' | 'success';
+};
+
+const Badge = ({
+  label,
+  tone = 'slate',
+}: {
+  label: string;
+  tone?: 'slate' | 'blue' | 'amber' | 'emerald';
+}) => {
   const toneStyles: Record<string, string> = {
     slate: 'bg-slate-100 text-slate-700',
     blue: 'bg-blue-50 text-blue-700 border border-blue-100',
@@ -46,12 +60,13 @@ export default function TemplateDetailPage() {
   const idValue = params?.id;
   const templateId = Array.isArray(idValue) ? idValue[0] : idValue ? String(idValue) : '';
   const hasTemplateId = Boolean(templateId);
+
   const queryClient = useQueryClient();
 
-  const [templateName, setTemplateName] = useState('');
-  const [templateDescription, setTemplateDescription] = useState('');
+  const [templateName, setTemplateName] = useState<string>('');
+  const [templateDescription, setTemplateDescription] = useState<string>('');
   const [stages, setStages] = useState<StageTemplateStageDto[]>([]);
-  const [toast, setToast] = useState<{ message: string; type?: 'error' | 'info' | 'success' } | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const showToast = (
@@ -74,7 +89,12 @@ export default function TemplateDetailPage() {
     };
   }, []);
 
-  const { data, isLoading, isError, refetch } = useQuery<TemplateDetailDto>({
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<TemplateDetailDto>({
     queryKey: ['template', templateId],
     queryFn: async () => {
       const res = await templatesApi.getOne(templateId);
@@ -83,11 +103,17 @@ export default function TemplateDetailPage() {
     enabled: hasTemplateId,
   });
 
+  // API 데이터 들어오면 로컬 상태 세팅
   useEffect(() => {
     if (data) {
       setTemplateName(data.name || '');
       setTemplateDescription(data.description || '');
-      setStages(data.stages.map((stage) => ({ ...stage, tasks: stage.tasks ? [...stage.tasks] : [] })));
+      setStages(
+        data.stages.map((stage) => ({
+          ...stage,
+          tasks: stage.tasks ? [...stage.tasks] : [],
+        })),
+      );
     }
   }, [data]);
 
@@ -98,12 +124,16 @@ export default function TemplateDetailPage() {
 
         const newTasks = [...stage.tasks];
         const targetIndex = direction === 'up' ? taskIndex - 1 : taskIndex + 1;
+
         if (targetIndex < 0 || targetIndex >= newTasks.length) return stage;
 
         const [task] = newTasks.splice(taskIndex, 1);
         newTasks.splice(targetIndex, 0, task);
 
-        return { ...stage, tasks: newTasks.map((taskItem, idx) => ({ ...taskItem, order: idx })) };
+        return {
+          ...stage,
+          tasks: newTasks.map((taskItem, idx) => ({ ...taskItem, order: idx })),
+        };
       }),
     );
   };
@@ -117,7 +147,11 @@ export default function TemplateDetailPage() {
     setStages((prev) =>
       prev.map((stage, sIdx) => {
         if (sIdx !== stageIndex) return stage;
-        const tasks = stage.tasks.map((task, tIdx) => (tIdx === taskIndex ? { ...task, [field]: value } : task));
+
+        const tasks = stage.tasks.map((task, tIdx) =>
+          tIdx === taskIndex ? { ...task, [field]: value } : task,
+        );
+
         return { ...stage, tasks };
       }),
     );
@@ -127,6 +161,7 @@ export default function TemplateDetailPage() {
     setStages((prev) =>
       prev.map((stage, sIdx) => {
         if (sIdx !== stageIndex) return stage;
+
         const newTask: StageTemplateTaskDto = {
           id: `temp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
           name: '새 태스크',
@@ -134,6 +169,7 @@ export default function TemplateDetailPage() {
           isDefaultActive: true,
           order: stage.tasks.length,
         };
+
         return { ...stage, tasks: [...stage.tasks, newTask] };
       }),
     );
@@ -143,18 +179,26 @@ export default function TemplateDetailPage() {
     setStages((prev) =>
       prev.map((stage, sIdx) => {
         if (sIdx !== stageIndex) return stage;
-        const newTasks = stage.tasks.filter((_, idx) => idx !== taskIndex).map((task, idx) => ({ ...task, order: idx }));
+
+        const newTasks = stage.tasks
+          .filter((_, idx) => idx !== taskIndex)
+          .map((task, idx) => ({ ...task, order: idx }));
+
         return { ...stage, tasks: newTasks };
       }),
     );
   };
 
-  const normalizedStages = useMemo(
+  // 서버로 보낼 때는 stage / task 순서를 인덱스로 재정규화
+  const normalizedStages: StageTemplateStageDto[] = useMemo(
     () =>
       stages.map((stage, stageIndex) => ({
         ...stage,
         order: stageIndex,
-        tasks: stage.tasks.map((task, taskIndex) => ({ ...task, order: taskIndex })),
+        tasks: stage.tasks.map((task, taskIndex) => ({
+          ...task,
+          order: taskIndex,
+        })),
       })),
     [stages],
   );
@@ -174,22 +218,34 @@ export default function TemplateDetailPage() {
       };
 
       const res = await templatesApi.updateStructure(templateId, payload);
-      return res.data;
+      return res.data as TemplateDetailDto;
     },
     onSuccess: (updated) => {
       queryClient.setQueryData(['template', templateId], updated);
       setTemplateName(updated.name || '');
       setTemplateDescription(updated.description || '');
-      setStages(updated.stages.map((stage) => ({ ...stage, tasks: stage.tasks ? [...stage.tasks] : [] })));
+      setStages(
+        updated.stages.map((stage) => ({
+          ...stage,
+          tasks: stage.tasks ? [...stage.tasks] : [],
+        })),
+      );
       showToast('템플릿이 저장되었습니다.', 'success');
     },
-    onError: (error: any) => {
-      const message = error?.message || '저장 중 오류가 발생했습니다.';
+    onError: (error: unknown) => {
+      const message =
+        error instanceof Error ? error.message : '저장 중 오류가 발생했습니다.';
       showToast(message, 'error');
     },
   });
 
-  const renderTaskRow = (stageIndex: number, task: StageTemplateTaskDto, taskIndex: number) => (
+  // 🔧 여기서 stage 길이를 인자로 받아서 사용
+  const renderTaskRow = (
+    stageIndex: number,
+    task: StageTemplateTaskDto,
+    taskIndex: number,
+    tasksLength: number,
+  ) => (
     <div
       key={task.id}
       className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg bg-white"
@@ -212,13 +268,19 @@ export default function TemplateDetailPage() {
             <Badge label={`기본 마감 : +${task.defaultDueDays}일`} tone="blue" />
           )}
         </div>
-        {task.description && <p className="text-sm text-slate-600">{task.description}</p>}
+
+        {task.description && (
+          <p className="text-sm text-slate-600">{task.description}</p>
+        )}
+
         <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
           <label className="inline-flex items-center gap-1">
             <input
               type="checkbox"
               checked={task.isMandatory}
-              onChange={(e) => updateTaskField(stageIndex, taskIndex, 'isMandatory', e.target.checked)}
+              onChange={(e) =>
+                updateTaskField(stageIndex, taskIndex, 'isMandatory', e.target.checked)
+              }
             />
             <span>필수</span>
           </label>
@@ -226,12 +288,15 @@ export default function TemplateDetailPage() {
             <input
               type="checkbox"
               checked={task.isDefaultActive !== false}
-              onChange={(e) => updateTaskField(stageIndex, taskIndex, 'isDefaultActive', e.target.checked)}
+              onChange={(e) =>
+                updateTaskField(stageIndex, taskIndex, 'isDefaultActive', e.target.checked)
+              }
             />
             <span>기본 활성</span>
           </label>
         </div>
       </div>
+
       <div className="flex flex-col gap-2">
         <button
           type="button"
@@ -245,7 +310,7 @@ export default function TemplateDetailPage() {
           type="button"
           className="p-2 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
           onClick={() => moveTask(stageIndex, taskIndex, 'down')}
-          disabled={taskIndex === stage.tasks.length - 1}
+          disabled={taskIndex === tasksLength - 1}
         >
           <ArrowDown className="h-4 w-4" />
         </button>
@@ -268,18 +333,23 @@ export default function TemplateDetailPage() {
             href="/templates"
             className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900"
           >
-            <ChevronLeft className="h-4 w-4" /> 목록으로
+            <ChevronLeft className="h-4 w-4" />
+            목록으로
           </Link>
           <h1 className="text-2xl font-bold text-slate-900">체크리스트 템플릿 상세</h1>
         </div>
 
         {isLoading && (
-          <div className="bg-white border border-slate-200 rounded-xl p-6 text-slate-600">불러오는 중…</div>
+          <div className="bg-white border border-slate-200 rounded-xl p-6 text-slate-600">
+            불러오는 중…
+          </div>
         )}
 
         {isError && (
           <div className="bg-white border border-red-200 rounded-xl p-6 text-slate-700">
-            <p className="font-medium text-red-700">템플릿 정보를 불러오는 중 오류가 발생했습니다.</p>
+            <p className="font-medium text-red-700">
+              템플릿 정보를 불러오는 중 오류가 발생했습니다.
+            </p>
             <button
               type="button"
               onClick={() => refetch()}
@@ -292,10 +362,13 @@ export default function TemplateDetailPage() {
 
         {!isLoading && !isError && data && (
           <div className="space-y-6">
+            {/* 상단 기본 정보 카드 */}
             <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex-1 min-w-[200px]">
-                  <label className="text-sm font-medium text-slate-700">템플릿 이름</label>
+                  <label className="text-sm font-medium text-slate-700">
+                    템플릿 이름
+                  </label>
                   <input
                     className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-base focus:border-slate-400 focus:outline-none"
                     value={templateName}
@@ -305,9 +378,13 @@ export default function TemplateDetailPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {data.isDefault && <Badge label="기본 템플릿" tone="blue" />}
-                  <Badge label={`단계 ${data.stageCount}개 · 태스크 ${data.taskCount}개`} tone="slate" />
+                  <Badge
+                    label={`단계 ${data.stageCount}개 · 태스크 ${data.taskCount}개`}
+                    tone="slate"
+                  />
                 </div>
               </div>
+
               <div>
                 <label className="text-sm font-medium text-slate-700">설명</label>
                 <textarea
@@ -318,6 +395,7 @@ export default function TemplateDetailPage() {
                   placeholder="템플릿에 대한 설명을 입력하세요"
                 />
               </div>
+
               <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
                 <div className="flex items-center gap-1">
                   <CalendarClock className="h-4 w-4 text-slate-500" />
@@ -326,16 +404,25 @@ export default function TemplateDetailPage() {
               </div>
             </div>
 
+            {/* 단계 / 태스크 구조 */}
             <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-6">
               <div className="flex items-center gap-2">
                 <ListChecks className="h-5 w-5 text-slate-500" />
-                <span className="text-lg font-semibold text-slate-900">단계 / 태스크 구조</span>
+                <span className="text-lg font-semibold text-slate-900">
+                  단계 / 태스크 구조
+                </span>
               </div>
+
               <div className="space-y-6">
                 {stages.map((stage, stageIndex) => (
-                  <div key={stage.id || `stage-${stageIndex}`} className="space-y-3">
+                  <div
+                    key={stage.id || `stage-${stageIndex}`}
+                    className="space-y-3"
+                  >
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-semibold text-slate-900">{stage.name}</h3>
+                      <h3 className="text-lg font-semibold text-slate-900">
+                        {stage.name}
+                      </h3>
                       <Badge label="필수" tone="amber" />
                       {stage.isDefaultActive === false ? (
                         <Badge label="기본 비활성" tone="slate" />
@@ -343,22 +430,38 @@ export default function TemplateDetailPage() {
                         <Badge label="기본 활성" tone="emerald" />
                       )}
                     </div>
-                    {stage.description && <p className="text-sm text-slate-600">{stage.description}</p>}
+
+                    {stage.description && (
+                      <p className="text-sm text-slate-600">
+                        {stage.description}
+                      </p>
+                    )}
+
                     <div className="space-y-2">
-                      {stage.tasks.map((task, taskIndex) => renderTaskRow(stageIndex, task, taskIndex))}
+                      {stage.tasks.map((task, taskIndex) =>
+                        renderTaskRow(
+                          stageIndex,
+                          task,
+                          taskIndex,
+                          stage.tasks.length,
+                        ),
+                      )}
                     </div>
+
                     <button
                       type="button"
                       onClick={() => addTask(stageIndex)}
                       className="inline-flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50"
                     >
-                      <Plus className="h-4 w-4" /> 태스크 추가
+                      <Plus className="h-4 w-4" />
+                      태스크 추가
                     </button>
                   </div>
                 ))}
               </div>
             </div>
 
+            {/* 저장 버튼 */}
             <div className="flex justify-end">
               <button
                 type="button"

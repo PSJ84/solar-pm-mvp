@@ -4,8 +4,10 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TemplatesService } from './templates.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { Request } from 'express';
-import type { ProjectStageTemplateDto } from '@shared/types/template.types';
-
+// Codex가 쓰던 공유 타입 모듈(@shared/types/...)은 우리 프로젝트에 없어서
+// 일단 1차 MVP에서는 any 타입으로 막아두고 나중에 shared 타입 만들 때 교체한다.
+// import type { ProjectStageTemplateDto } from '@shared/types/template.types';
+type ProjectStageTemplateDto = any;
 
 @ApiTags('Templates')
 @ApiBearerAuth()
