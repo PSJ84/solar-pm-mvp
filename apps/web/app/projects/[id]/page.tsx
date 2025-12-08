@@ -614,7 +614,7 @@ export default function ProjectDetailPage() {
     return visibleStages.find((s) => s.id === activeStageId) || visibleStages[0];
   }, [activeStageId, visibleStages]);
 
-  const visibleTasks: Task[] = useMemo(() => {
+  const activeStageTasks: Task[] = useMemo(() => {
     const tasks = activeStage?.tasks || [];
     return showHiddenTasks ? tasks : tasks.filter((task) => task.isActive !== false);
   }, [activeStage?.tasks, showHiddenTasks]);
@@ -626,7 +626,7 @@ export default function ProjectDetailPage() {
     if (target) {
       target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-  }, [highlightedTaskId, visibleTasks.length, activeStageId]);
+  }, [highlightedTaskId, activeStageTasks.length, activeStageId]);
 
   useEffect(() => {
     if (activeStage) {
@@ -650,12 +650,14 @@ export default function ProjectDetailPage() {
     }
   }, [isAddStageModalOpen, templateOptions, selectedTemplateId]);
 
-  const taskCounts = useMemo(() => {
+  const activeStageTaskCounts = useMemo(() => {
+    const tasks = activeStage?.tasks || [];
+    const list = showHiddenTasks ? tasks : tasks.filter((task) => task.isActive !== false);
     return {
-      total: projectWithDerived?.totalTasks ?? 0,
-      completed: projectWithDerived?.completedTasks ?? 0,
+      total: list.length,
+      completed: list.filter((task) => task.status === 'completed').length,
     };
-  }, [projectWithDerived?.totalTasks, projectWithDerived?.completedTasks]);
+  }, [activeStage?.tasks, showHiddenTasks]);
 
   const handleStageClick = (stageId: string) => {
     setActiveStageId(stageId);
@@ -1041,7 +1043,7 @@ export default function ProjectDetailPage() {
                       {activeStage?.template?.name || '태스크 목록'}
                     </h3>
                     <p className="text-sm text-slate-500">
-                      전체 {taskCounts.total}개 · 완료 {taskCounts.completed}개
+                      전체 {activeStageTaskCounts.total}개 · 완료 {activeStageTaskCounts.completed}개
                     </p>
                   </div>
                   <label className="flex items-center gap-2 text-sm text-slate-600">
@@ -1099,8 +1101,8 @@ export default function ProjectDetailPage() {
               </div>
 
               <div className="divide-y divide-slate-100">
-                {visibleTasks.length ? (
-                  visibleTasks.map((task, index) => {
+                {activeStageTasks.length ? (
+                  activeStageTasks.map((task, index) => {
                     const statusConfig = STATUS_LABELS[task.status];
                     const isTaskActive = task.isActive !== false;
                     const titleValue = taskTitleDrafts[task.id] ?? task.title;
