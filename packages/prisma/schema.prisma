@@ -224,12 +224,16 @@ enum TaskStatus {
 }
 
 model Task {
+  // NOTE: after editing schema.prisma, run:
+  // pnpm prisma migrate dev --name add_task_note
+  // pnpm prisma generate
   id              String        @id @default(cuid())
   title           String
   description     String?
 
   status               TaskStatus   @default(pending) // task state (To-Do status)
   memo                 String?      // short "current state" memo
+  note                 String?      @db.Text
   waitingFor           String?      // what/who we are waiting for (when status = waiting)
   // MVP #6: 오늘 마감 위젯 연동
   dueDate              DateTime?    // official due date (used for My Work D-Day)

@@ -8,7 +8,6 @@ import {
   Share2,
   MapPin,
   Zap,
-  Calendar,
   CheckCircle2,
   Circle,
   Clock,
@@ -99,8 +98,11 @@ export default function ProjectDetailPage() {
   const [showHiddenStages, setShowHiddenStages] = useState(false);
   const [showHiddenTasks, setShowHiddenTasks] = useState(false);
   const [taskTitleDrafts, setTaskTitleDrafts] = useState<Record<string, string>>({});
+  const [memoDrafts, setMemoDrafts] = useState<Record<string, string>>({});
+  const [editingMemoMap, setEditingMemoMap] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{ message: string; type?: 'error' | 'info' | 'success' } | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const memoInputRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const [isAddStageModalOpen, setIsAddStageModalOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
@@ -173,6 +175,30 @@ export default function ProjectDetailPage() {
 
     return recalcProjectData(project, project.stages || []);
   }, [project]);
+
+  useEffect(() => {
+    if (!projectWithDerived?.stages) return;
+
+    setMemoDrafts((prev) => {
+      const next = { ...prev };
+      projectWithDerived.stages.forEach((stage) => {
+        stage.tasks?.forEach((task) => {
+          if (!editingMemoMap[task.id]) {
+            next[task.id] = task.memo ?? '';
+          }
+        });
+      });
+      return next;
+    });
+  }, [projectWithDerived?.stages, editingMemoMap]);
+
+  useEffect(() => {
+    Object.entries(editingMemoMap).forEach(([taskId, isEditing]) => {
+      if (isEditing) {
+        memoInputRefs.current[taskId]?.focus();
+      }
+    });
+  }, [editingMemoMap]);
 
   const visibleStages = useMemo(() => {
     if (!projectWithDerived?.stages) return [] as ProjectStage[];
@@ -358,7 +384,7 @@ export default function ProjectDetailPage() {
     }: {
       taskId: string;
       stageId: string;
-      data: Partial<Pick<Task, 'title' | 'isMandatory' | 'isActive' | 'startDate' | 'completedDate'>>;
+      data: Partial<Pick<Task, 'title' | 'isActive' | 'startDate' | 'completedDate' | 'dueDate' | 'memo'>>;
     }) => {
       const response = await tasksApi.update(taskId, data);
       return response.data;
@@ -579,12 +605,11 @@ export default function ProjectDetailPage() {
     updateTaskFields({ taskId: task.id, stageId: activeStage.id, data: { isActive: !(task.isActive !== false) } });
   };
 
-  const handleTaskMandatoryToggle = (task: Task) => {
-    if (!task?.id || !activeStage?.id) return;
-    updateTaskFields({ taskId: task.id, stageId: activeStage.id, data: { isMandatory: !task.isMandatory } });
-  };
-
-  const handleTaskDateChange = (task: Task, field: 'startDate' | 'completedDate', value: string) => {
+  const handleTaskDateChange = (
+    task: Task,
+    field: 'startDate' | 'completedDate' | 'dueDate',
+    value: string,
+  ) => {
     if (!task?.id || !activeStage?.id) return;
 
     updateTaskFields({
@@ -608,6 +633,55 @@ export default function ProjectDetailPage() {
     if (!nextTitle || nextTitle.trim() === '' || nextTitle === task.title || task.id.startsWith('temp-')) return;
 
     updateTaskFields({ taskId: task.id, stageId: activeStage.id, data: { title: nextTitle.trim() } });
+  };
+
+  const startEditingMemo = (taskId: string) => {
+    setEditingMemoMap((prev) => ({ ...prev, [taskId]: true }));
+  };
+
+  const stopEditingMemo = (taskId: string) => {
+    setEditingMemoMap((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+  };
+
+  const handleMemoDraftChange = (taskId: string, value: string) => {
+    setMemoDrafts((prev) => ({ ...prev, [taskId]: value }));
+  };
+
+  const handleMemoSave = (task: Task) => {
+    if (!task?.id || !activeStage?.id) {
+      stopEditingMemo(task.id);
+      return;
+    }
+
+    const draft = memoDrafts[task.id] ?? '';
+    const original = task.memo ?? '';
+
+    if (draft.trim() === original.trim()) {
+      stopEditingMemo(task.id);
+      return;
+    }
+
+    updateTaskFields(
+      { taskId: task.id, stageId: activeStage.id, data: { memo: draft } },
+      {
+        onSuccess: () => {
+          stopEditingMemo(task.id);
+        },
+        onError: () => {
+          stopEditingMemo(task.id);
+        },
+      },
+    );
+  };
+
+  const handleCompletionToggle = (task: Task, checked: boolean) => {
+    if (!task?.id || isUpdatingTask || task.isActive === false) return;
+    const nextStatus: TaskStatus = checked ? 'completed' : 'pending';
+    updateTaskStatus({ taskId: task.id, nextStatus });
   };
 
   const handleStatusToggle = (task: Task) => {
@@ -930,73 +1004,107 @@ export default function ProjectDetailPage() {
                     const statusConfig = STATUS_LABELS[task.status];
                     const isTaskActive = task.isActive !== false;
                     const titleValue = taskTitleDrafts[task.id] ?? task.title;
+                    const isEditingMemo = editingMemoMap[task.id] === true;
+                    const memoDraft = memoDrafts[task.id] ?? task.memo ?? '';
 
                     return (
                       <div
                         key={task.id}
                         className={cn(
-                          'flex flex-col gap-3 px-5 py-4 hover:bg-slate-50 transition-colors sm:flex-row sm:items-center sm:gap-4',
+                          'flex flex-col gap-3 px-5 py-4 hover:bg-slate-50 transition-colors',
                           !isTaskActive && showHiddenTasks && 'opacity-60',
                         )}
                       >
-                        <div className="flex-1 min-w-0 space-y-2">
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">{`#${index + 1}`}</span>
-                            {statusConfig && (
-                              <span className={cn('px-2 py-0.5 rounded-full font-medium', statusConfig.color)}>
-                                {statusConfig.label}
-                              </span>
-                            )}
-                            {!isTaskActive && showHiddenTasks && (
-                              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">숨김</span>
-                            )}
-                            {task.isMandatory && (
-                              <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700">필수</span>
-                            )}
+                        <div className="flex flex-col gap-3 w-full">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={task.status === 'completed'}
+                                  onChange={(e) => handleCompletionToggle(task, e.target.checked)}
+                                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                  disabled={isUpdatingTask || !isTaskActive || isSavingTaskFields}
+                                />
+                                <span>완료</span>
+                              </label>
+
+                              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={isTaskActive}
+                                  onChange={() => handleTaskActiveToggle(task)}
+                                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                  disabled={isSavingTaskFields}
+                                />
+                                <span>활성</span>
+                              </label>
+
+                              <div className="flex-1 min-w-0 space-y-1">
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                  <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">{`#${index + 1}`}</span>
+                                  {task.isMandatory && (
+                                    <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700">필수</span>
+                                  )}
+                                  {statusConfig && (
+                                    <span className={cn('px-2 py-0.5 rounded-full font-medium', statusConfig.color)}>
+                                      {statusConfig.label}
+                                    </span>
+                                  )}
+                                  {!isTaskActive && showHiddenTasks && (
+                                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">숨김</span>
+                                  )}
+                                </div>
+
+                                <input
+                                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  value={titleValue}
+                                  onChange={(e) => handleTaskTitleChange(task.id, e.target.value)}
+                                  onBlur={() => handleTaskTitleBlur(task)}
+                                  placeholder="태스크 이름"
+                                  disabled={isSavingTaskFields}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 self-start">
+                              <button
+                                type="button"
+                                disabled={isUpdatingTask || !isTaskActive || isSavingTaskFields}
+                                onClick={() => handleStatusToggle(task)}
+                                className="inline-flex items-center gap-1 px-3 py-2 text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:opacity-50"
+                              >
+                                {task.status === 'completed' ? (
+                                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                ) : task.status === 'in_progress' ? (
+                                  <Clock className="h-4 w-4 text-blue-500" />
+                                ) : (
+                                  <Circle className="h-4 w-4 text-slate-400" />
+                                )}
+                                <span>상태</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTask(task)}
+                                disabled={isDeletingTask || isSavingTaskFields}
+                                className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                                aria-label={`${task.title} 삭제`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
 
-                          <input
-                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            value={titleValue}
-                            onChange={(e) => handleTaskTitleChange(task.id, e.target.value)}
-                            onBlur={() => handleTaskTitleBlur(task)}
-                            placeholder="태스크 이름"
-                            disabled={isSavingTaskFields}
-                          />
-
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700">
-                            <label className="inline-flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
+                            <label className="flex items-center gap-2">
+                              <span>기한</span>
                               <input
-                                type="checkbox"
-                                checked={task.isMandatory}
-                                onChange={() => handleTaskMandatoryToggle(task)}
-                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                disabled={isSavingTaskFields}
+                                type="date"
+                                value={normalizeDateInput(task.dueDate)}
+                                onChange={(e) => handleTaskDateChange(task, 'dueDate', e.target.value)}
+                                className="rounded border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               />
-                              <span>필수</span>
                             </label>
-                            <label className="inline-flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={isTaskActive}
-                                onChange={() => handleTaskActiveToggle(task)}
-                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                disabled={isSavingTaskFields}
-                              />
-                              <span>활성</span>
-                            </label>
-                            {task.dueDate && (
-                              <span className="flex items-center gap-1 text-xs text-slate-500">
-                                <Calendar className="h-3.5 w-3.5" />
-                                {new Date(task.dueDate).toLocaleDateString('ko-KR')}
-                              </span>
-                            )}
-                            {task.assignee?.name && (
-                              <span className="text-xs text-slate-500">담당: {task.assignee.name}</span>
-                            )}
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-2">
                             <label className="flex items-center gap-2">
                               <span>시작일</span>
                               <input
@@ -1016,33 +1124,43 @@ export default function ProjectDetailPage() {
                               />
                             </label>
                           </div>
-                        </div>
 
-                        <div className="flex items-center gap-2 self-end sm:self-center">
-                          <button
-                            type="button"
-                            disabled={isUpdatingTask || !isTaskActive || isSavingTaskFields}
-                            onClick={() => handleStatusToggle(task)}
-                            className="inline-flex items-center gap-1 px-3 py-2 text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:opacity-50"
-                          >
-                            {task.status === 'completed' ? (
-                              <CheckCircle2 className="h-4 w-4 text-green-500" />
-                            ) : task.status === 'in_progress' ? (
-                              <Clock className="h-4 w-4 text-blue-500" />
+                          <div className="space-y-1">
+                            <label className="block text-xs font-medium text-slate-500">메모</label>
+                            {!isEditingMemo ? (
+                              <div
+                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 bg-white/70 cursor-text"
+                                onClick={() => {
+                                  startEditingMemo(task.id);
+                                  handleMemoDraftChange(task.id, task.memo ?? '');
+                                }}
+                              >
+                                {task.memo && task.memo.trim().length > 0 ? (
+                                  <span>{task.memo}</span>
+                                ) : (
+                                  <span className="text-slate-400">메모를 입력해 주세요</span>
+                                )}
+                              </div>
                             ) : (
-                              <Circle className="h-4 w-4 text-slate-400" />
+                              <textarea
+                                ref={(el) => {
+                                  memoInputRefs.current[task.id] = el;
+                                }}
+                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                value={memoDraft}
+                                rows={3}
+                                onChange={(e) => handleMemoDraftChange(task.id, e.target.value)}
+                                onBlur={() => handleMemoSave(task)}
+                                onKeyDown={(e) => {
+                                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                                    e.currentTarget.blur();
+                                  }
+                                }}
+                                placeholder="태스크에 대한 메모를 입력하세요"
+                                disabled={isSavingTaskFields}
+                              />
                             )}
-                            <span>상태</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteTask(task)}
-                            disabled={isDeletingTask || isSavingTaskFields}
-                            className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
-                            aria-label={`${task.title} 삭제`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          </div>
                         </div>
                       </div>
                     );
