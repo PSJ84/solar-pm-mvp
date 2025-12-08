@@ -64,7 +64,6 @@ export class TasksService {
       title: dto.title,
       description: dto.description,
       dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-      assigneeId: dto.assigneeId,
       isMandatory: dto.isMandatory || false,
       isActive: dto.isActive ?? true,
       startDate: dto.startDate ? new Date(dto.startDate) : null,
@@ -182,7 +181,6 @@ export class TasksService {
       description: dto.description,
       dueDate:
         dto.dueDate !== undefined ? (dto.dueDate ? new Date(dto.dueDate) : null) : undefined,
-      assigneeId: dto.assigneeId,
       isMandatory: dto.isMandatory !== undefined ? dto.isMandatory : undefined,
       isActive: dto.isActive !== undefined ? dto.isActive : undefined,
       startDate:
