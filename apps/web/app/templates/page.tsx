@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarClock, ChevronDown, ChevronRight, ChevronUp, Layers, ListChecks, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, ChevronDown, ChevronUp, Layers, ListChecks, Plus, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { templatesApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
@@ -158,59 +158,60 @@ export default function TemplatesPage() {
 
             {(templates || []).map((template, index) => (
               <div key={template.id} className="relative">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleDeleteTemplate(template.id);
-                  }}
-                  className="absolute top-3 right-3 p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                  aria-label={`${template.name} 삭제`}
-                  disabled={deleteTemplate.isPending}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-                <div className="absolute left-3 top-3 flex flex-col gap-1">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleReorder(index, -1);
-                    }}
-                    disabled={index === 0 || reorderTemplates.isPending}
-                    className="p-1 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
-                    aria-label="위로 이동"
-                  >
-                    <ChevronUp className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleReorder(index, 1);
-                    }}
-                    disabled={index === templates.length - 1 || reorderTemplates.isPending}
-                    className="p-1 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
-                    aria-label="아래로 이동"
-                  >
-                    <ChevronDown className="h-4 w-4" />
-                  </button>
-                </div>
                 <Link
                   href={`/templates/${template.id}`}
                   className="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-300 hover:shadow-sm transition flex flex-col gap-3"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="text-lg font-semibold text-slate-900">{template.name}</h3>
-                      {template.description && (
-                        <p className="text-slate-600 text-sm mt-1 line-clamp-2">{template.description}</p>
-                      )}
+                    <div className="flex items-start gap-2 min-w-0">
+                      <div className="flex flex-col gap-1 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleReorder(index, -1);
+                          }}
+                          disabled={index === 0 || reorderTemplates.isPending}
+                          className="p-1 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                          aria-label="위로 이동"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleReorder(index, 1);
+                          }}
+                          disabled={index === templates.length - 1 || reorderTemplates.isPending}
+                          className="p-1 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                          aria-label="아래로 이동"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-lg font-semibold text-slate-900 truncate">{template.name}</h3>
+                        {template.description && (
+                          <p className="text-slate-600 text-sm mt-1 line-clamp-2">{template.description}</p>
+                        )}
+                      </div>
                     </div>
-                    <ChevronRight className="h-5 w-5 text-slate-400" />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDeleteTemplate(template.id);
+                      }}
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                      aria-label={`${template.name} 삭제`}
+                      disabled={deleteTemplate.isPending}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
