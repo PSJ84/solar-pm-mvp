@@ -59,6 +59,11 @@ export interface Task {
     name: string;
     email: string;
   };
+  checklistSummary?: {
+    total: number;
+    completed: number;
+    progress: number;
+  };
   _count?: {
     photos: number;
     documents: number;

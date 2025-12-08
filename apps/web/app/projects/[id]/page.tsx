@@ -22,6 +22,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn, STATUS_LABELS, formatRelativeTime, getProgressColor } from '@/lib/utils';
 import { projectsApi, stagesApi, tasksApi, templatesApi } from '@/lib/api';
+import { ChecklistPanel } from '@/components/checklist/ChecklistPanel';
 import type { Project, ProjectStage, Task, TaskHistory, TaskStatus } from '@/types';
 import type { TemplateListItemDto } from '@shared/types/template.types';
 
@@ -113,6 +114,7 @@ export default function ProjectDetailPage() {
   const [memoDrafts, setMemoDrafts] = useState<Record<string, string>>({});
   const [editingMemoMap, setEditingMemoMap] = useState<Record<string, boolean>>({});
   const [memoExpandedMap, setMemoExpandedMap] = useState<Record<string, boolean>>({});
+  const [checklistExpandedMap, setChecklistExpandedMap] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{ message: string; type?: 'error' | 'info' | 'success' } | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const memoInputRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
@@ -645,6 +647,10 @@ export default function ProjectDetailPage() {
   }, [activeStageId]);
 
   useEffect(() => {
+    setChecklistExpandedMap({});
+  }, [activeStageId]);
+
+  useEffect(() => {
     if (isAddStageModalOpen && templateOptions?.length && !selectedTemplateId) {
       setSelectedTemplateId(templateOptions[0].id);
     }
@@ -758,6 +764,10 @@ export default function ProjectDetailPage() {
         },
       },
     );
+  };
+
+  const toggleChecklistPanel = (taskId: string) => {
+    setChecklistExpandedMap((prev) => ({ ...prev, [taskId]: !prev[taskId] }));
   };
 
   const handleCompletionToggle = (task: Task, checked: boolean) => {
@@ -1160,6 +1170,11 @@ export default function ProjectDetailPage() {
                                       {statusConfig.label}
                                     </span>
                                   )}
+                                  {task.checklistSummary && task.checklistSummary.total > 0 && (
+                                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                                      📋 {task.checklistSummary.completed}/{task.checklistSummary.total}
+                                    </span>
+                                  )}
                                   {!isTaskActive && showHiddenTasks && (
                                     <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">숨김</span>
                                   )}
@@ -1191,6 +1206,16 @@ export default function ProjectDetailPage() {
                                   <Circle className="h-4 w-4 text-slate-400" />
                                 )}
                                 <span>상태</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => toggleChecklistPanel(task.id)}
+                                className="inline-flex items-center gap-1 px-3 py-2 text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg"
+                              >
+                                <span role="img" aria-label="checklist">
+                                  📋
+                                </span>
+                                <span>체크리스트</span>
                               </button>
                               <button
                                 type="button"
@@ -1287,6 +1312,12 @@ export default function ProjectDetailPage() {
                               />
                             )}
                           </div>
+
+                          {checklistExpandedMap[task.id] && (
+                            <div className="pt-2">
+                              <ChecklistPanel taskId={task.id} defaultExpanded />
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
