@@ -327,21 +327,7 @@ export class TasksService {
     const stage = await this.prisma.projectStage.findUnique({
       where: { id: stageId, deletedAt: null },
       include: {
-        template: {
-          include: {
-            taskTemplates: {
-              where: { deletedAt: null },
-              include: {
-                checklistTemplate: {
-                  include: {
-                    _count: { select: { items: true } },
-                  },
-                },
-              },
-              orderBy: { order: 'asc' },
-            },
-          },
-        },
+        template: { select: { name: true, id: true } },
         tasks: {
           where: { deletedAt: null },
           select: { title: true },
@@ -355,22 +341,39 @@ export class TasksService {
 
     const existingTitles = new Set(stage.tasks.map((task) => task.title));
 
-    const templates =
-      stage.template?.taskTemplates.map((template) => ({
-        id: template.id,
-        title: template.title,
-        description: template.description,
-        isMandatory: template.isMandatory,
-        defaultDueDays: template.defaultDueDays,
-        alreadyAdded: existingTitles.has(template.title),
-        checklistTemplate: template.checklistTemplate
-          ? {
-              id: template.checklistTemplate.id,
-              name: template.checklistTemplate.name,
-              itemCount: template.checklistTemplate._count?.items || 0,
-            }
-          : null,
-      })) || [];
+    const taskTemplates = await this.prisma.taskTemplate.findMany({
+      where: { stageTemplateId: stage.templateId, deletedAt: null },
+      orderBy: { order: 'asc' },
+    });
+
+    const checklistTemplateIds = taskTemplates
+      .map((t) => t.checklistTemplateId)
+      .filter((id): id is string => Boolean(id));
+
+    const checklistTemplates = checklistTemplateIds.length
+      ? await this.prisma.checklistTemplate.findMany({
+          where: { id: { in: checklistTemplateIds } },
+          include: {
+            _count: { select: { items: true } },
+          },
+        })
+      : [];
+
+    const checklistMap = new Map(
+      checklistTemplates.map((ct) => [ct.id, { id: ct.id, name: ct.name, itemCount: ct._count.items }]),
+    );
+
+    const templates = taskTemplates.map((template) => ({
+      id: template.id,
+      title: template.title,
+      description: template.description,
+      isMandatory: template.isMandatory,
+      defaultDueDays: template.defaultDueDays,
+      alreadyAdded: existingTitles.has(template.title),
+      checklistTemplate: template.checklistTemplateId
+        ? checklistMap.get(template.checklistTemplateId) || null
+        : null,
+    }));
 
     return {
       stageId,
@@ -385,20 +388,18 @@ export class TasksService {
   async createTaskFromTemplate(stageId: string, taskTemplateId: string) {
     const template = await this.prisma.taskTemplate.findUnique({
       where: { id: taskTemplateId, deletedAt: null },
-      include: {
-        checklistTemplate: {
-          include: {
-            items: {
-              orderBy: { order: 'asc' },
-            },
-          },
-        },
-      },
     });
 
     if (!template) {
       throw new NotFoundException('태스크 템플릿을 찾을 수 없습니다.');
     }
+
+    const checklistTemplate = template.checklistTemplateId
+      ? await this.prisma.checklistTemplate.findUnique({
+          where: { id: template.checklistTemplateId },
+          include: { items: { orderBy: { order: 'asc' } } },
+        })
+      : null;
 
     const stage = await this.prisma.projectStage.findUnique({
       where: { id: stageId, deletedAt: null },
@@ -434,9 +435,9 @@ export class TasksService {
       },
     });
 
-    if (template.checklistTemplate?.items?.length) {
+    if (checklistTemplate?.items?.length) {
       await this.prisma.checklistItem.createMany({
-        data: template.checklistTemplate.items.map((item, index) => ({
+        data: checklistTemplate.items.map((item, index) => ({
           taskId: task.id,
           title: item.title,
           status: 'pending',
