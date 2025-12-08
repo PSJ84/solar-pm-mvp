@@ -7,6 +7,7 @@ import { RiskProjectsBanner } from '@/components/dashboard/RiskProjectsBanner';
 import { ProjectList } from '@/components/dashboard/ProjectList';
 import { SummaryCards } from '@/components/dashboard/SummaryCards';
 import { ExpiringDocuments } from '@/components/dashboard/ExpiringDocuments';
+import { MyWorkSection } from '@/components/dashboard/MyWorkSection';
 import { dashboardApi, DashboardFullSummary } from '@/lib/api';
 
 export default function DashboardPage() {
@@ -53,24 +54,32 @@ export default function DashboardPage() {
       {/* 요약 카드 */}
       <SummaryCards stats={summary?.stats} />
 
-      {/* 오늘 마감 위젯 + 지연 위험 배너 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <TodayWidget 
-          tasks={summary?.todayTasks || []} 
-          upcoming7Days={summary?.upcoming7Days || []}
-        />
-        <RiskProjectsBanner projects={summary?.riskProjects || []} />
-      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 space-y-6">
+          {/* 오늘 마감 위젯 + 지연 위험 배너 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <TodayWidget
+              tasks={summary?.todayTasks || []}
+              upcoming7Days={summary?.upcoming7Days || []}
+            />
+            <RiskProjectsBanner projects={summary?.riskProjects || []} />
+          </div>
 
-      {/* [v1.1] 만료 임박 문서 */}
-      {summary?.expiringDocuments && summary.expiringDocuments.length > 0 && (
-        <ExpiringDocuments documents={summary.expiringDocuments} />
-      )}
+          {/* [v1.1] 만료 임박 문서 */}
+          {summary?.expiringDocuments && summary.expiringDocuments.length > 0 && (
+            <ExpiringDocuments documents={summary.expiringDocuments} />
+          )}
 
-      {/* 프로젝트 목록 */}
-      <div>
-        <h2 className="text-xl font-semibold text-slate-900 mb-4">내 프로젝트</h2>
-        <ProjectList />
+          {/* 프로젝트 목록 */}
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900 mb-4">내 프로젝트</h2>
+            <ProjectList />
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <MyWorkSection />
+        </div>
       </div>
     </div>
   );

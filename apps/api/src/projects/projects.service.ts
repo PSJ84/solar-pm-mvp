@@ -61,6 +61,7 @@ export class ProjectsService {
           templateId: template.id,
           status: 'pending',
           isActive: template.isDefaultActive ?? true,
+          order: template.order ?? 0,
         },
       });
 
