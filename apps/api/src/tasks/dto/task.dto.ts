@@ -27,6 +27,12 @@ export class CreateTaskDto {
   @ApiPropertyOptional({ description: '태스크 메모' })
   @IsOptional()
   @IsString()
+  memo?: string;
+
+  // NOTE: alias for backward compatibility
+  @ApiPropertyOptional({ description: '태스크 메모 (deprecated: memo 권장)' })
+  @IsOptional()
+  @IsString()
   note?: string;
 
   @ApiPropertyOptional({ description: '태스크 시작일' })
@@ -80,6 +86,12 @@ export class UpdateTaskDto {
   @IsBoolean()
   isActive?: boolean;
 
+  @ApiPropertyOptional({ description: '태스크 메모' })
+  @IsOptional()
+  @IsString()
+  memo?: string;
+
+  // NOTE: alias for backward compatibility
   @ApiPropertyOptional({ description: '태스크 메모' })
   @IsOptional()
   @IsString()

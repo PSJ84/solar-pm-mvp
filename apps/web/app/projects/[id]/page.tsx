@@ -668,6 +668,14 @@ export default function ProjectDetailPage() {
     setMemoExpandedMap((prev) => ({ ...prev, [taskId]: !prev[taskId] }));
   };
 
+  const resetMemoExpanded = (taskId: string) => {
+    setMemoExpandedMap((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+  };
+
   const handleMemoDraftChange = (taskId: string, value: string) => {
     setMemoDrafts((prev) => ({ ...prev, [taskId]: value }));
   };
@@ -683,6 +691,7 @@ export default function ProjectDetailPage() {
 
     if (draft.trim() === original.trim()) {
       stopEditingMemo(task.id);
+      resetMemoExpanded(task.id);
       return;
     }
 
@@ -691,9 +700,11 @@ export default function ProjectDetailPage() {
       {
         onSuccess: () => {
           stopEditingMemo(task.id);
+          resetMemoExpanded(task.id);
         },
         onError: () => {
           stopEditingMemo(task.id);
+          resetMemoExpanded(task.id);
         },
       },
     );
@@ -1028,7 +1039,7 @@ export default function ProjectDetailPage() {
                     const isEditingMemo = editingMemoMap[task.id] === true;
                     const memoDraft = memoDrafts[task.id] ?? task.memo ?? '';
                     const isMemoExpanded = memoExpandedMap[task.id] === true;
-                    const showMemoToggle = task.memo && isLongMemo(task.memo);
+                    const memoIsLong = isLongMemo(task.memo);
 
                     return (
                       <div
@@ -1155,7 +1166,7 @@ export default function ProjectDetailPage() {
                                 <div
                                   className={cn(
                                     'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 bg-white/70 cursor-text whitespace-pre-line',
-                                    showMemoToggle && !isMemoExpanded ? 'line-clamp-3' : '',
+                                    memoIsLong && !isMemoExpanded ? 'line-clamp-3' : '',
                                     !task.memo || task.memo.trim().length === 0 ? 'text-slate-400' : '',
                                   )}
                                   onClick={() => {
@@ -1167,7 +1178,7 @@ export default function ProjectDetailPage() {
                                     ? task.memo
                                     : '메모를 입력해 주세요.'}
                                 </div>
-                                {showMemoToggle && (
+                                {memoIsLong && (
                                   <button
                                     type="button"
                                     className="text-xs text-blue-600 hover:underline"
