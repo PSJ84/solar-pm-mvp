@@ -69,7 +69,7 @@ export class TasksService {
       isActive: dto.isActive ?? true,
       startDate: dto.startDate ? new Date(dto.startDate) : null,
       completedDate: dto.completedDate ? new Date(dto.completedDate) : null,
-      memo: dto.note ?? null,
+      note: dto.note ?? null,
       status: this.deriveStatusFromDates(
         dto.startDate ? new Date(dto.startDate) : null,
         dto.completedDate ? new Date(dto.completedDate) : null,
@@ -193,7 +193,7 @@ export class TasksService {
             ? new Date(dto.completedDate)
             : null
           : undefined,
-      memo: dto.note !== undefined ? dto.note : undefined,
+      note: dto.note !== undefined ? dto.note : undefined,
       status: derivedStatus, // undefined면 기존 값 유지
     } as Prisma.TaskUpdateInput;
 
