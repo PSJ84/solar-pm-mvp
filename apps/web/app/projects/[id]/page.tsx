@@ -549,6 +549,24 @@ export default function ProjectDetailPage() {
     onSettled: () => setIsCloning(false),
   });
 
+  const {
+    mutate: deleteProject,
+    isPending: isDeletingProject,
+  } = useMutation({
+    mutationFn: async () => {
+      await projectsApi.delete(projectId);
+    },
+    onSuccess: () => {
+      showToast('프로젝트가 삭제(보관)되었습니다.', 'success');
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      router.push('/projects');
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.message || '프로젝트 삭제(보관)에 실패했습니다.';
+      showToast(message, 'error');
+    },
+  });
+
   const { mutate: addStageFromTemplate, isPending: isAddingStage } = useMutation({
     mutationFn: async ({ templateId, afterStageId }: { templateId: string; afterStageId?: string }) => {
       const response = await projectsApi.addStageFromTemplate(projectId, { templateId, afterStageId });
@@ -891,6 +909,26 @@ export default function ProjectDetailPage() {
                 <span className="hidden sm:inline">
                   {isCloning || cloneMutation.isPending ? '복제 중...' : '복제'}
                 </span>
+              </button>
+              {/* 삭제/보관 버튼 */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!projectId || isDeletingProject) return;
+                  const confirmed = window.confirm(
+                    `${projectWithDerived.name} 프로젝트를 삭제(보관)하시겠습니까?\n\n` +
+                      '- 데이터는 완전히 제거되지 않고 복구 가능한 상태로 보관됩니다.\n' +
+                      '- 대시보드와 프로젝트 목록에서 더 이상 표시되지 않습니다.',
+                  );
+
+                  if (!confirmed) return;
+                  deleteProject();
+                }}
+                disabled={isDeletingProject}
+                className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDeletingProject ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                <span className="hidden sm:inline">삭제/보관</span>
               </button>
             </div>
           </div>
