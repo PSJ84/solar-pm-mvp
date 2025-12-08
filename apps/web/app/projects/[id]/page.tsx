@@ -384,9 +384,12 @@ export default function ProjectDetailPage() {
     }: {
       taskId: string;
       stageId: string;
-      data: Partial<Pick<Task, 'title' | 'isActive' | 'startDate' | 'completedDate' | 'dueDate' | 'memo'>>;
+      data: Partial<Pick<Task, 'title' | 'isActive' | 'startDate' | 'completedDate' | 'dueDate'>> & {
+        note?: string | null;
+      };
     }) => {
-      const response = await tasksApi.update(taskId, data);
+      const payload = 'note' in data ? { ...data, note: data.note } : data;
+      const response = await tasksApi.update(taskId, payload);
       return response.data;
     },
     onMutate: async ({ taskId, stageId, data }) => {
@@ -394,7 +397,15 @@ export default function ProjectDetailPage() {
       const previousProject = queryClient.getQueryData<Project>(projectQueryKey);
 
       updateStageTasksInCache(stageId, (tasks) =>
-        tasks.map((task) => (task.id === taskId ? { ...task, ...data } : task)),
+        tasks.map((task) =>
+          task.id === taskId
+            ? {
+                ...task,
+                ...data,
+                ...(data.note !== undefined ? { memo: data.note } : {}),
+              }
+            : task,
+        ),
       );
 
       return { previousProject };
@@ -666,7 +677,7 @@ export default function ProjectDetailPage() {
     }
 
     updateTaskFields(
-      { taskId: task.id, stageId: activeStage.id, data: { memo: draft } },
+      { taskId: task.id, stageId: activeStage.id, data: { note: draft } },
       {
         onSuccess: () => {
           stopEditingMemo(task.id);
