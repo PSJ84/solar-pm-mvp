@@ -1,5 +1,6 @@
 // apps/api/src/tasks/tasks.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, TaskStatus } from './dto/task.dto';
 
@@ -59,23 +60,25 @@ export class TasksService {
    */
   async create(dto: CreateTaskDto, userId?: string) {
     const resolvedUserId = await this.resolveUserId(userId);
+    const data: Prisma.TaskCreateInput = {
+      title: dto.title,
+      description: dto.description,
+      dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+      assigneeId: dto.assigneeId,
+      isMandatory: dto.isMandatory || false,
+      isActive: dto.isActive ?? true,
+      startDate: dto.startDate ? new Date(dto.startDate) : null,
+      completedDate: dto.completedDate ? new Date(dto.completedDate) : null,
+      note: dto.note ?? null,
+      status: this.deriveStatusFromDates(
+        dto.startDate ? new Date(dto.startDate) : null,
+        dto.completedDate ? new Date(dto.completedDate) : null,
+      ),
+      projectStage: { connect: { id: dto.projectStageId } },
+    } as Prisma.TaskCreateInput;
+
     const task = await this.prisma.task.create({
-      data: {
-        title: dto.title,
-        description: dto.description,
-        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-        assigneeId: dto.assigneeId,
-        isMandatory: dto.isMandatory || false,
-        isActive: dto.isActive ?? true,
-        startDate: dto.startDate ? new Date(dto.startDate) : null,
-        completedDate: dto.completedDate ? new Date(dto.completedDate) : null,
-        note: dto.note ?? null,
-        status: this.deriveStatusFromDates(
-          dto.startDate ? new Date(dto.startDate) : null,
-          dto.completedDate ? new Date(dto.completedDate) : null,
-        ),
-        projectStageId: dto.projectStageId,
-      },
+      data,
     });
 
     // 활동 로그 기록 (MVP #30)
@@ -174,27 +177,29 @@ export class TasksService {
       );
     }
 
+    const data: Prisma.TaskUpdateInput = {
+      title: dto.title,
+      description: dto.description,
+      dueDate:
+        dto.dueDate !== undefined ? (dto.dueDate ? new Date(dto.dueDate) : null) : undefined,
+      assigneeId: dto.assigneeId,
+      isMandatory: dto.isMandatory !== undefined ? dto.isMandatory : undefined,
+      isActive: dto.isActive !== undefined ? dto.isActive : undefined,
+      startDate:
+        dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : undefined,
+      completedDate:
+        dto.completedDate !== undefined
+          ? dto.completedDate
+            ? new Date(dto.completedDate)
+            : null
+          : undefined,
+      note: dto.note !== undefined ? dto.note : undefined,
+      status: derivedStatus, // undefined면 기존 값 유지
+    } as Prisma.TaskUpdateInput;
+
     const task = await this.prisma.task.update({
       where: { id },
-      data: {
-        title: dto.title,
-        description: dto.description,
-        dueDate:
-          dto.dueDate !== undefined ? (dto.dueDate ? new Date(dto.dueDate) : null) : undefined,
-        assigneeId: dto.assigneeId,
-        isMandatory: dto.isMandatory !== undefined ? dto.isMandatory : undefined,
-        isActive: dto.isActive !== undefined ? dto.isActive : undefined,
-        startDate:
-          dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : undefined,
-        completedDate:
-          dto.completedDate !== undefined
-            ? dto.completedDate
-              ? new Date(dto.completedDate)
-              : null
-            : undefined,
-        note: dto.note !== undefined ? dto.note : undefined,
-        status: derivedStatus, // undefined면 기존 값 유지
-      },
+      data,
     });
 
     // 변경 내역이 있으면 히스토리 기록
