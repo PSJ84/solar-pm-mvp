@@ -145,11 +145,12 @@ model StageTemplate {
   // Relations
   taskTemplates TaskTemplate[]
   projectStages ProjectStage[]
-  
+
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
   @@unique([companyId, name])
+  @@index([companyId, order])
   @@index([companyId])
   @@index([deletedAt])
   @@map("stage_templates")

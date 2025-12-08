@@ -162,6 +162,7 @@ export const templatesApi = {
   updateStructure: (id: string, data: any) => api.patch<TemplateDetailDto>(`/templates/${id}/structure`, data),
   create: (data: { name: string; description?: string }) => api.post<TemplateDetailDto>('/templates', data),
   delete: (id: string) => api.delete(`/templates/${id}`),
+  reorder: (templateIds: string[]) => api.patch('/templates/reorder', { templateIds }),
 };
 
 // Share Links
