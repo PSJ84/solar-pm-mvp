@@ -69,13 +69,13 @@ export class TasksService {
       isActive: dto.isActive ?? true,
       startDate: dto.startDate ? new Date(dto.startDate) : null,
       completedDate: dto.completedDate ? new Date(dto.completedDate) : null,
-      note: dto.note ?? null,
+      memo: dto.note ?? null,
       status: this.deriveStatusFromDates(
         dto.startDate ? new Date(dto.startDate) : null,
         dto.completedDate ? new Date(dto.completedDate) : null,
       ),
       projectStage: { connect: { id: dto.projectStageId } },
-    } as Prisma.TaskCreateInput;
+    };
 
     const task = await this.prisma.task.create({
       data,
@@ -193,9 +193,9 @@ export class TasksService {
             ? new Date(dto.completedDate)
             : null
           : undefined,
-      note: dto.note !== undefined ? dto.note : undefined,
       status: derivedStatus, // undefined면 기존 값 유지
-    } as Prisma.TaskUpdateInput;
+      ...(dto.note !== undefined ? { memo: dto.note } : {}),
+    };
 
     const task = await this.prisma.task.update({
       where: { id },
