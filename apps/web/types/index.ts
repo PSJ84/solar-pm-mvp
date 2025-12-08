@@ -46,7 +46,7 @@ export interface Task {
   id: string;
   title: string;
   description?: string;
-  note?: string;
+  memo?: string;
   dueDate?: string | null;
   status: TaskStatus;
   isActive?: boolean;
