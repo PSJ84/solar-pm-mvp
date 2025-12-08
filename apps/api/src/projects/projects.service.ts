@@ -49,7 +49,12 @@ export class ProjectsService {
     // 2. 회사의 단계 템플릿 조회
     const stageTemplates = await this.prisma.stageTemplate.findMany({
       where: { companyId: resolvedCompanyId, deletedAt: null },
-      include: { taskTemplates: { where: { deletedAt: null } } },
+      include: {
+        taskTemplates: {
+          where: { deletedAt: null },
+          orderBy: { order: 'asc' },
+        },
+      },
       orderBy: { order: 'asc' },
     });
 
@@ -61,7 +66,7 @@ export class ProjectsService {
           templateId: template.id,
           status: 'pending',
           isActive: template.isDefaultActive ?? true,
-          order: template.order ?? 0,
+          // NOTE: ProjectStage.order는 아직 사용하지 않는다 (다음 단계 작업)
         },
       });
 
