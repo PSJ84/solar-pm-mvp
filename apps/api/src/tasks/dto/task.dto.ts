@@ -5,8 +5,8 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export enum TaskStatus {
   PENDING = 'pending',
   IN_PROGRESS = 'in_progress',
+  WAITING = 'waiting',
   COMPLETED = 'completed',
-  DELAYED = 'delayed',
 }
 
 export class CreateTaskDto {
@@ -22,7 +22,18 @@ export class CreateTaskDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()
-  dueDate?: string;
+  dueDate?: string | null;
+
+  @ApiPropertyOptional({ description: '태스크 메모' })
+  @IsOptional()
+  @IsString()
+  memo?: string;
+
+  // NOTE: alias for backward compatibility
+  @ApiPropertyOptional({ description: '태스크 메모 (deprecated: memo 권장)' })
+  @IsOptional()
+  @IsString()
+  note?: string;
 
   @ApiPropertyOptional({ description: '태스크 시작일' })
   @IsOptional()
@@ -75,10 +86,21 @@ export class UpdateTaskDto {
   @IsBoolean()
   isActive?: boolean;
 
+  @ApiPropertyOptional({ description: '태스크 메모' })
+  @IsOptional()
+  @IsString()
+  memo?: string;
+
+  // NOTE: alias for backward compatibility
+  @ApiPropertyOptional({ description: '태스크 메모' })
+  @IsOptional()
+  @IsString()
+  note?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()
-  dueDate?: string;
+  dueDate?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -107,8 +129,18 @@ export class UpdateTaskStatusDto {
   @IsEnum(TaskStatus)
   status: TaskStatus;
 
-  @ApiPropertyOptional({ description: '상태 변경 코멘트' })
+  @ApiPropertyOptional({ description: '상태 변경 메모' })
   @IsOptional()
   @IsString()
-  comment?: string;
+  memo?: string;
+
+  @ApiPropertyOptional({ description: '대기 중인 대상/내용' })
+  @IsOptional()
+  @IsString()
+  waitingFor?: string;
+
+  @ApiPropertyOptional({ description: '마감일 (ISO 문자열)', type: String })
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string | null;
 }

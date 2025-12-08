@@ -1,10 +1,10 @@
 // apps/web/app/templates/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarClock, ChevronRight, Layers, ListChecks, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, ChevronDown, ChevronUp, Layers, ListChecks, Plus, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { templatesApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
@@ -26,6 +26,7 @@ export default function TemplatesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateDescription, setTemplateDescription] = useState('');
+  const [templates, setTemplates] = useState<TemplateListItemDto[]>([]);
   const { data, isLoading, isError, refetch } = useQuery<TemplateListItemDto[]>({
     queryKey: ['templates'],
     queryFn: async () => {
@@ -33,6 +34,12 @@ export default function TemplatesPage() {
       return res.data;
     },
   });
+
+  useEffect(() => {
+    if (data) {
+      setTemplates(data);
+    }
+  }, [data]);
 
   const createTemplate = useMutation({
     mutationFn: async (payload: { name: string; description?: string }) => {
@@ -60,10 +67,46 @@ export default function TemplatesPage() {
     },
   });
 
+  const reorderTemplates = useMutation({
+    mutationFn: async (templateIds: string[]) => {
+      const res = await templatesApi.reorder(templateIds);
+      return res.data as TemplateListItemDto[];
+    },
+    onSuccess: (ordered) => {
+      if (ordered) {
+        setTemplates(ordered);
+      }
+      queryClient.invalidateQueries({ queryKey: ['templates'] });
+    },
+    onError: () => {
+      alert('템플릿 순서를 저장하지 못했습니다.');
+      if (data) setTemplates(data);
+    },
+  });
+
   const handleDeleteTemplate = (id: string) => {
     const confirmed = window.confirm('선택한 템플릿을 삭제하시겠습니까?');
     if (!confirmed) return;
     deleteTemplate.mutate(id);
+  };
+
+  const handleReorder = (index: number, direction: number) => {
+    setTemplates((current) => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= current.length) return current;
+
+      const updated = [...current];
+      [updated[index], updated[targetIndex]] = [updated[targetIndex], updated[index]];
+
+      const orderedIds = updated.map((t) => t.id);
+      reorderTemplates.mutate(orderedIds, {
+        onError: () => {
+          setTemplates(current);
+        },
+      });
+
+      return updated;
+    });
   };
 
   return (
@@ -107,39 +150,68 @@ export default function TemplatesPage() {
 
         {!isLoading && !isError && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {(data || []).length === 0 && (
+            {(templates || []).length === 0 && (
               <div className="col-span-full bg-white border border-slate-200 rounded-xl p-6 text-slate-600">
                 등록된 템플릿이 없습니다. 기본 템플릿을 추가해 주세요.
               </div>
             )}
 
-            {(data || []).map((template) => (
+            {(templates || []).map((template, index) => (
               <div key={template.id} className="relative">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleDeleteTemplate(template.id);
-                  }}
-                  className="absolute top-3 right-3 p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                  aria-label={`${template.name} 삭제`}
-                  disabled={deleteTemplate.isPending}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
                 <Link
                   href={`/templates/${template.id}`}
                   className="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-300 hover:shadow-sm transition flex flex-col gap-3"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="text-lg font-semibold text-slate-900">{template.name}</h3>
-                      {template.description && (
-                        <p className="text-slate-600 text-sm mt-1 line-clamp-2">{template.description}</p>
-                      )}
+                    <div className="flex items-start gap-2 min-w-0">
+                      <div className="flex flex-col gap-1 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleReorder(index, -1);
+                          }}
+                          disabled={index === 0 || reorderTemplates.isPending}
+                          className="p-1 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                          aria-label="위로 이동"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleReorder(index, 1);
+                          }}
+                          disabled={index === templates.length - 1 || reorderTemplates.isPending}
+                          className="p-1 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                          aria-label="아래로 이동"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-lg font-semibold text-slate-900 truncate">{template.name}</h3>
+                        {template.description && (
+                          <p className="text-slate-600 text-sm mt-1 line-clamp-2">{template.description}</p>
+                        )}
+                      </div>
                     </div>
-                    <ChevronRight className="h-5 w-5 text-slate-400" />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDeleteTemplate(template.id);
+                      }}
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                      aria-label={`${template.name} 삭제`}
+                      disabled={deleteTemplate.isPending}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
