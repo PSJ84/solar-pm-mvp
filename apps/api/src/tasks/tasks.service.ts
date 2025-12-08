@@ -99,6 +99,9 @@ export class TasksService {
         assignee: {
           select: { id: true, name: true, email: true },
         },
+        checklistItems: {
+          orderBy: { order: 'asc' },
+        },
         photos: {
           orderBy: { takenAt: 'desc' },
         },
@@ -131,7 +134,18 @@ export class TasksService {
       throw new NotFoundException('태스크를 찾을 수 없습니다.');
     }
 
-    return task;
+    const checklistTotal = task.checklistItems.length;
+    const checklistCompleted = task.checklistItems.filter((item) => item.status === 'completed').length;
+
+    return {
+      ...task,
+      checklistSummary: {
+        total: checklistTotal,
+        completed: checklistCompleted,
+        progress:
+          checklistTotal > 0 ? Math.round((checklistCompleted / checklistTotal) * 100) : 0,
+      },
+    };
   }
 
   /**
