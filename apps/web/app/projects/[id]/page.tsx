@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   Share2,
@@ -97,7 +97,10 @@ export default function ProjectDetailPage() {
   const hasProjectId = Boolean(projectId);
 
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const initialTaskId = searchParams?.get('task') || undefined;
   const [activeStageId, setActiveStageId] = useState<string | null>(null);
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | undefined>();
   const [isCloning, setIsCloning] = useState(false);
   const [stageDates, setStageDates] = useState<Record<StageDateField, string>>({
     startDate: '',
@@ -113,6 +116,8 @@ export default function ProjectDetailPage() {
   const [toast, setToast] = useState<{ message: string; type?: 'error' | 'info' | 'success' } | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const memoInputRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const taskCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const hasInitializedFromUrlRef = useRef(false);
   const [isAddStageModalOpen, setIsAddStageModalOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
@@ -187,6 +192,21 @@ export default function ProjectDetailPage() {
   }, [project]);
 
   useEffect(() => {
+    if (!initialTaskId || !projectWithDerived?.stages) return;
+    if (hasInitializedFromUrlRef.current) return;
+
+    const stageWithTask = projectWithDerived.stages.find((stage) =>
+      stage.tasks?.some((task) => task.id === initialTaskId),
+    );
+
+    if (stageWithTask) {
+      setActiveStageId(stageWithTask.id);
+      setHighlightedTaskId(initialTaskId);
+      hasInitializedFromUrlRef.current = true;
+    }
+  }, [initialTaskId, projectWithDerived?.stages]);
+
+  useEffect(() => {
     if (!projectWithDerived?.stages) return;
 
     setMemoDrafts((prev) => {
@@ -209,6 +229,7 @@ export default function ProjectDetailPage() {
       }
     });
   }, [editingMemoMap]);
+
 
   const visibleStages = useMemo(() => {
     if (!projectWithDerived?.stages) return [] as ProjectStage[];
@@ -579,6 +600,15 @@ export default function ProjectDetailPage() {
     const tasks = activeStage?.tasks || [];
     return showHiddenTasks ? tasks : tasks.filter((task) => task.isActive !== false);
   }, [activeStage?.tasks, showHiddenTasks]);
+
+  useEffect(() => {
+    if (!highlightedTaskId) return;
+
+    const target = taskCardRefs.current[highlightedTaskId];
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [highlightedTaskId, visibleTasks.length, activeStageId]);
 
   useEffect(() => {
     if (activeStage) {
@@ -1040,13 +1070,18 @@ export default function ProjectDetailPage() {
                     const memoDraft = memoDrafts[task.id] ?? task.memo ?? '';
                     const isMemoExpanded = memoExpandedMap[task.id] === true;
                     const memoIsLong = isLongMemo(task.memo);
+                    const isHighlighted = highlightedTaskId === task.id;
 
                     return (
                       <div
                         key={task.id}
+                        ref={(el) => {
+                          taskCardRefs.current[task.id] = el;
+                        }}
                         className={cn(
-                          'flex flex-col gap-3 px-5 py-4 hover:bg-slate-50 transition-colors',
+                          'flex flex-col gap-3 px-5 py-4 hover:bg-slate-50 transition-colors rounded-lg border border-transparent',
                           !isTaskActive && showHiddenTasks && 'opacity-60',
+                          isHighlighted && 'border-indigo-400 bg-indigo-50/70 shadow-sm',
                         )}
                       >
                         <div className="flex flex-col gap-3 w-full">
