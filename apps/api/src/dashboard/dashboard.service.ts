@@ -1,5 +1,6 @@
 // apps/api/src/dashboard/dashboard.service.ts
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   DashboardSummaryDto,
@@ -7,6 +8,25 @@ import {
   ExpiringDocumentItem,
   RiskProjectItem,
 } from './dto/dashboard-summary.dto';
+import { MyWorkTab, MyWorkTaskDto } from './dto/my-work.dto';
+import { TaskStatus } from '../tasks/dto/task.dto';
+
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+const startOfDay = (d: Date) => {
+  const copy = new Date(d);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+};
+
+const calcDDay = (dueDate: Date | null): number | null => {
+  if (!dueDate) return null;
+
+  const today = startOfDay(new Date());
+  const target = startOfDay(dueDate);
+  const diff = target.getTime() - today.getTime();
+  return Math.round(diff / MS_PER_DAY);
+};
 
 @Injectable()
 export class DashboardService {
@@ -25,6 +45,109 @@ export class DashboardService {
     }
 
     return company.id;
+  }
+
+  /**
+   * My Work: assignee 기반 태스크 목록 조회
+   */
+  async getMyWork(params: {
+    userId: string;
+    companyId?: string;
+    tab?: MyWorkTab;
+  }): Promise<MyWorkTaskDto[]> {
+    const { userId, companyId, tab = 'today' } = params;
+    const resolvedCompanyId = await this.resolveCompanyId(companyId);
+
+    const todayStart = startOfDay(new Date());
+    const tomorrowStart = startOfDay(new Date(todayStart.getTime() + MS_PER_DAY));
+
+    const where: Prisma.TaskWhereInput = {
+      deletedAt: null,
+      isActive: true,
+      assigneeId: userId,
+      projectStage: {
+        project: {
+          companyId: resolvedCompanyId,
+          deletedAt: null,
+        },
+      },
+    };
+
+    switch (tab) {
+      case 'today':
+        where.dueDate = {
+          gte: todayStart,
+          lt: tomorrowStart,
+        };
+        where.status = { not: TaskStatus.COMPLETED };
+        break;
+      case 'in_progress':
+        where.status = TaskStatus.IN_PROGRESS;
+        break;
+      case 'waiting':
+        where.status = TaskStatus.WAITING;
+        break;
+      case 'overdue':
+        where.dueDate = {
+          lt: todayStart,
+        };
+        where.status = { not: TaskStatus.COMPLETED };
+        break;
+      default:
+        break;
+    }
+
+    const tasks = await this.prisma.task.findMany({
+      where,
+      include: {
+        projectStage: {
+          include: {
+            project: true,
+            template: true,
+          },
+        },
+      },
+    });
+
+    const mapped = tasks.map<MyWorkTaskDto>((task) => {
+      const dueDate = task.dueDate ?? null;
+      const dDay = calcDDay(dueDate);
+
+      return {
+        taskId: task.id,
+        taskTitle: task.title,
+        projectId: task.projectStage.project.id,
+        projectName: task.projectStage.project.name,
+        stageId: task.projectStage.id,
+        stageName: task.projectStage.template?.name || task.projectStage.id,
+        status: task.status as TaskStatus,
+        dueDate: dueDate ? dueDate.toISOString() : null,
+        dDay,
+        waitingFor: task.waitingFor ?? null,
+      };
+    });
+
+    const sortByDDay = (a: MyWorkTaskDto, b: MyWorkTaskDto) => {
+      if (a.dDay === null && b.dDay === null) return 0;
+      if (a.dDay === null) return 1;
+      if (b.dDay === null) return -1;
+      return a.dDay - b.dDay;
+    };
+
+    const sortByDueDate = (a: MyWorkTaskDto, b: MyWorkTaskDto) => {
+      if (a.dueDate === null && b.dueDate === null) return 0;
+      if (a.dueDate === null) return 1;
+      if (b.dueDate === null) return -1;
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    };
+
+    if (tab === 'today' || tab === 'overdue') {
+      mapped.sort(sortByDDay);
+    } else if (tab === 'in_progress' || tab === 'waiting') {
+      mapped.sort(sortByDueDate);
+    }
+
+    return mapped;
   }
 
   /**
