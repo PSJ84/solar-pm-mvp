@@ -5,6 +5,8 @@ import {
   updateChecklistItem,
   deleteChecklistItem,
   reorderChecklist,
+  getChecklistTemplates,
+  applyTemplateToTask,
 } from '@/lib/api/checklist';
 import type { ChecklistStatus } from '@/types/checklist';
 
@@ -13,6 +15,24 @@ export function useChecklist(taskId: string) {
     queryKey: ['checklist', taskId],
     queryFn: () => getChecklist(taskId),
     enabled: Boolean(taskId),
+  });
+}
+
+export function useChecklistTemplates() {
+  return useQuery({
+    queryKey: ['checklist-templates'],
+    queryFn: getChecklistTemplates,
+  });
+}
+
+export function useApplyTemplate(taskId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (templateId: string) => applyTemplateToTask(templateId, taskId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['checklist', taskId] });
+    },
   });
 }
 

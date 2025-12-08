@@ -309,6 +309,34 @@ model ChecklistItem {
   @@map("checklist_items")
 }
 
+// 체크리스트 템플릿
+model ChecklistTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+
+  items ChecklistTemplateItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("checklist_templates")
+}
+
+// 체크리스트 템플릿 아이템
+model ChecklistTemplateItem {
+  id       String  @id @default(cuid())
+  title    String
+  order    Int     @default(0)
+  hasExpiry Boolean @default(false)
+
+  templateId String
+  template   ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+  @@map("checklist_template_items")
+}
+
 // MVP #30: 활동 로그 (태스크 변경 히스토리)
 model TaskHistory {
   id        String   @id @default(cuid())

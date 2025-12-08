@@ -34,3 +34,23 @@ export interface ChecklistResponse {
   items: ChecklistItem[];
   summary: ChecklistSummary;
 }
+
+export interface ChecklistTemplateItem {
+  id: string;
+  title: string;
+  order: number;
+  hasExpiry: boolean;
+  templateId: string;
+}
+
+export interface ChecklistTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  items: ChecklistTemplateItem[];
+  _count?: {
+    items: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+}

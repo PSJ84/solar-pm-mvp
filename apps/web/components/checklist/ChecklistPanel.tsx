@@ -9,6 +9,7 @@ import {
 } from '@/hooks/useChecklist';
 import { ChecklistProgress } from './ChecklistProgress';
 import { ChecklistItemRow } from './ChecklistItemRow';
+import { ChecklistTemplateModal } from './ChecklistTemplateModal';
 import type { ChecklistStatus } from '@/types/checklist';
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
 export function ChecklistPanel({ taskId, defaultExpanded = false }: Props) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [newItemTitle, setNewItemTitle] = useState('');
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   const { data, isLoading, error } = useChecklist(taskId);
   const createMutation = useCreateChecklistItem(taskId);
@@ -114,9 +116,22 @@ export function ChecklistPanel({ taskId, defaultExpanded = false }: Props) {
                 추가
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => setShowTemplateModal(true)}
+              className="mt-2 w-full py-2 text-sm text-blue-600 hover:bg-blue-50 rounded border border-dashed border-blue-300"
+            >
+              📑 템플릿에서 불러오기
+            </button>
           </div>
         </div>
       )}
+
+      <ChecklistTemplateModal
+        taskId={taskId}
+        isOpen={showTemplateModal}
+        onClose={() => setShowTemplateModal(false)}
+      />
     </div>
   );
 }

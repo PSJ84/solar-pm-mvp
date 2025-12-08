@@ -1,5 +1,10 @@
 import { api } from '../api';
-import type { ChecklistItem, ChecklistResponse, ChecklistStatus } from '@/types/checklist';
+import type {
+  ChecklistItem,
+  ChecklistResponse,
+  ChecklistStatus,
+  ChecklistTemplate,
+} from '@/types/checklist';
 
 export async function getChecklist(taskId: string): Promise<ChecklistResponse> {
   const response = await api.get(`/tasks/${taskId}/checklist`);
@@ -34,5 +39,18 @@ export async function deleteChecklistItem(id: string): Promise<void> {
 
 export async function reorderChecklist(taskId: string, itemIds: string[]): Promise<ChecklistResponse> {
   const response = await api.patch(`/tasks/${taskId}/checklist/reorder`, { itemIds });
+  return response.data;
+}
+
+export async function getChecklistTemplates(): Promise<ChecklistTemplate[]> {
+  const response = await api.get('/checklist-templates');
+  return response.data;
+}
+
+export async function applyTemplateToTask(
+  templateId: string,
+  taskId: string,
+): Promise<{ applied: number; total: number; items: ChecklistItem[] }> {
+  const response = await api.post(`/checklist-templates/${templateId}/apply/${taskId}`);
   return response.data;
 }
