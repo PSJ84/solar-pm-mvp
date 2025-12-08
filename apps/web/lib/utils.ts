@@ -42,8 +42,8 @@ export function getDueDateLabel(dueDate: string | Date): {
 export const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending: { label: '대기', color: 'bg-gray-100 text-gray-700' },
   in_progress: { label: '진행중', color: 'bg-blue-100 text-blue-700' },
+  waiting: { label: '대기중', color: 'bg-amber-100 text-amber-700' },
   completed: { label: '완료', color: 'bg-green-100 text-green-700' },
-  delayed: { label: '지연', color: 'bg-red-100 text-red-700' },
   planning: { label: '계획중', color: 'bg-purple-100 text-purple-700' },
   on_hold: { label: '보류', color: 'bg-yellow-100 text-yellow-700' },
 };
