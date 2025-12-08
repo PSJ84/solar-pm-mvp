@@ -61,44 +61,59 @@ export class DashboardService {
     const todayStart = startOfDay(new Date());
     const tomorrowStart = startOfDay(new Date(todayStart.getTime() + MS_PER_DAY));
 
-    const where: Prisma.TaskWhereInput = {
+    const baseWhere: Prisma.TaskWhereInput = {
       deletedAt: null,
       isActive: true,
-      assigneeId: userId,
+      status: { not: TaskStatus.COMPLETED },
       projectStage: {
         project: {
           companyId: resolvedCompanyId,
           deletedAt: null,
         },
       },
+      OR: [
+        { assigneeId: userId },
+        {
+          assigneeId: null,
+          projectStage: {
+            project: { companyId: resolvedCompanyId },
+          },
+        },
+      ],
     };
+
+    let tabWhere: Prisma.TaskWhereInput = {};
 
     switch (tab) {
       case 'today':
-        where.dueDate = {
-          gte: todayStart,
-          lt: tomorrowStart,
+        tabWhere = {
+          dueDate: {
+            gte: todayStart,
+            lt: tomorrowStart,
+          },
         };
-        where.status = { not: TaskStatus.COMPLETED };
-        break;
-      case 'in_progress':
-        where.status = TaskStatus.IN_PROGRESS;
-        break;
-      case 'waiting':
-        where.status = TaskStatus.WAITING;
         break;
       case 'overdue':
-        where.dueDate = {
-          lt: todayStart,
+        tabWhere = {
+          dueDate: {
+            lt: todayStart,
+          },
         };
-        where.status = { not: TaskStatus.COMPLETED };
+        break;
+      case 'in_progress':
+        tabWhere = { status: TaskStatus.IN_PROGRESS };
+        break;
+      case 'waiting':
+        tabWhere = { status: TaskStatus.WAITING };
         break;
       default:
-        break;
+        tabWhere = {};
     }
 
     const tasks = await this.prisma.task.findMany({
-      where,
+      where: {
+        AND: [baseWhere, tabWhere],
+      },
       include: {
         projectStage: {
           include: {
@@ -107,6 +122,10 @@ export class DashboardService {
           },
         },
       },
+      orderBy: [
+        { dueDate: 'asc' },
+        { createdAt: 'asc' },
+      ],
     });
 
     const mapped = tasks.map<MyWorkTaskDto>((task) => {
