@@ -145,11 +145,12 @@ model StageTemplate {
   // Relations
   taskTemplates TaskTemplate[]
   projectStages ProjectStage[]
-  
+
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
   @@unique([companyId, name])
+  @@index([companyId, order])
   @@index([companyId])
   @@index([deletedAt])
   @@map("stage_templates")
@@ -224,12 +225,16 @@ enum TaskStatus {
 }
 
 model Task {
+  // NOTE: after editing schema.prisma, run:
+  // pnpm prisma migrate dev --name add_task_note
+  // pnpm prisma generate
   id              String        @id @default(cuid())
   title           String
   description     String?
 
   status               TaskStatus   @default(pending) // task state (To-Do status)
   memo                 String?      // short "current state" memo
+  note                 String?      @db.Text
   waitingFor           String?      // what/who we are waiting for (when status = waiting)
   // MVP #6: 오늘 마감 위젯 연동
   dueDate              DateTime?    // official due date (used for My Work D-Day)
@@ -260,6 +265,7 @@ model Task {
   histories       TaskHistory[] // MVP #30: 활동 로그
   photos          Photo[]       // MVP #5: 현장 사진
   documents       Document[]
+  checklistItems  ChecklistItem[]
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -271,6 +277,36 @@ model Task {
   @@index([status, dueDate])
   @@index([deletedAt])
   @@map("tasks")
+}
+
+// 체크리스트 아이템 (태스크 하위)
+model ChecklistItem {
+  id        String   @id @default(cuid())
+  title     String
+
+  // 상태 관리
+  status    String   @default("pending")
+
+  memo      String?
+  order     Int      @default(0)
+
+  // 서류 관련 (선택적)
+  issuedAt  DateTime?
+  expiresAt DateTime?
+
+  // 파일 첨부 (추후 확장용)
+  fileUrl   String?
+  fileName  String?
+
+  // 관계
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId])
+  @@map("checklist_items")
 }
 
 // MVP #30: 활동 로그 (태스크 변경 히스토리)
