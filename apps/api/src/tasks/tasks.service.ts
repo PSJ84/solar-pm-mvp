@@ -2,7 +2,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, TaskStatus } from './dto/task.dto';
+import {
+  CreateTaskDto,
+  UpdateTaskDto,
+  UpdateTaskStatusDto,
+  TaskStatus,
+} from './dto/task.dto';
 
 @Injectable()
 export class TasksService {
@@ -93,14 +98,12 @@ export class TasksService {
    * 태스크 상세 조회
    */
   async findOne(id: string) {
+    // 1) 태스크 기본 정보 + 연관 데이터
     const task = await this.prisma.task.findFirst({
       where: { id, deletedAt: null },
       include: {
         assignee: {
           select: { id: true, name: true, email: true },
-        },
-        checklistItems: {
-          orderBy: { order: 'asc' },
         },
         photos: {
           orderBy: { takenAt: 'desc' },
@@ -127,6 +130,7 @@ export class TasksService {
             },
           },
         },
+        // 여기에는 checklistItems 안 넣고, 아래에서 별도 쿼리로 가져옴
       },
     });
 
@@ -134,16 +138,29 @@ export class TasksService {
       throw new NotFoundException('태스크를 찾을 수 없습니다.');
     }
 
-    const checklistTotal = task.checklistItems.length;
-    const checklistCompleted = task.checklistItems.filter((item) => item.status === 'completed').length;
+    // 2) 체크리스트는 ChecklistItem 테이블에서 별도 조회
+    const prismaAny = this.prisma as any; // 타입 충돌 피하기 위한 캐스팅
+    const checklistItems = await prismaAny.checklistItem.findMany({
+      where: { taskId: id },
+      orderBy: { order: 'asc' },
+    });
+
+    const checklistTotal = checklistItems.length;
+    const checklistCompleted = checklistItems.filter(
+      (item: any) => item.status === 'completed',
+    ).length;
 
     return {
       ...task,
+      // 프론트에서 그대로 쓰고 싶으면 같이 내려줌
+      checklistItems,
       checklistSummary: {
         total: checklistTotal,
         completed: checklistCompleted,
         progress:
-          checklistTotal > 0 ? Math.round((checklistCompleted / checklistTotal) * 100) : 0,
+          checklistTotal > 0
+            ? Math.round((checklistCompleted / checklistTotal) * 100)
+            : 0,
       },
     };
   }
@@ -171,7 +188,11 @@ export class TasksService {
     }
 
     const nextStartDate =
-      dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : existing.startDate;
+      dto.startDate !== undefined
+        ? dto.startDate
+          ? new Date(dto.startDate)
+          : null
+        : existing.startDate;
     const nextCompletedDate =
       dto.completedDate !== undefined
         ? dto.completedDate
@@ -179,14 +200,17 @@ export class TasksService {
           : null
         : existing.completedDate;
 
-    const shouldDeriveStatus = dto.startDate !== undefined || dto.completedDate !== undefined;
+    const shouldDeriveStatus =
+      dto.startDate !== undefined || dto.completedDate !== undefined;
     const derivedStatus = shouldDeriveStatus
       ? this.deriveStatusFromDates(nextStartDate, nextCompletedDate)
       : undefined;
 
     if (derivedStatus && derivedStatus !== existing.status) {
       changes.push(
-        `상태: ${this.getStatusLabel(existing.status)} → ${this.getStatusLabel(derivedStatus)}`,
+        `상태: ${this.getStatusLabel(existing.status)} → ${this.getStatusLabel(
+          derivedStatus,
+        )}`,
       );
     }
 
@@ -194,11 +218,19 @@ export class TasksService {
       title: dto.title,
       description: dto.description,
       dueDate:
-        dto.dueDate !== undefined ? (dto.dueDate ? new Date(dto.dueDate) : null) : undefined,
+        dto.dueDate !== undefined
+          ? dto.dueDate
+            ? new Date(dto.dueDate)
+            : null
+          : undefined,
       isMandatory: dto.isMandatory !== undefined ? dto.isMandatory : undefined,
       isActive: dto.isActive !== undefined ? dto.isActive : undefined,
       startDate:
-        dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : undefined,
+        dto.startDate !== undefined
+          ? dto.startDate
+            ? new Date(dto.startDate)
+            : null
+          : undefined,
       completedDate:
         dto.completedDate !== undefined
           ? dto.completedDate
@@ -302,7 +334,9 @@ export class TasksService {
 
     // 상태가 변경된 경우에만 히스토리 기록
     if (statusChanged) {
-      const comment = `상태 변경: ${this.getStatusLabel(oldStatus)} → ${this.getStatusLabel(newStatus)}`;
+      const comment = `상태 변경: ${this.getStatusLabel(
+        oldStatus,
+      )} → ${this.getStatusLabel(newStatus)}`;
 
       await this.createHistory(
         id,
@@ -332,7 +366,14 @@ export class TasksService {
       data: { deletedAt: new Date(), isActive: false },
     });
 
-    await this.createHistory(id, resolvedUserId, 'deleted', existing.status, existing.status, '태스크 삭제');
+    await this.createHistory(
+      id,
+      resolvedUserId,
+      'deleted',
+      existing.status,
+      existing.status,
+      '태스크 삭제',
+    );
 
     // 둘 다 필요: 단계 상태 갱신 + 프로젝트 최근 수정일 갱신
     await this.updateStageStatus(existing.projectStageId);
