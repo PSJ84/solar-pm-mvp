@@ -46,7 +46,8 @@ export interface Task {
   id: string;
   title: string;
   description?: string;
-  dueDate?: string;
+  memo?: string;
+  dueDate?: string | null;
   status: TaskStatus;
   isActive?: boolean;
   isMandatory: boolean;
@@ -57,6 +58,11 @@ export interface Task {
     id: string;
     name: string;
     email: string;
+  };
+  checklistSummary?: {
+    total: number;
+    completed: number;
+    progress: number;
   };
   _count?: {
     photos: number;
@@ -69,7 +75,7 @@ export interface Task {
   stage?: string;
 }
 
-export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'delayed';
+export type TaskStatus = 'pending' | 'in_progress' | 'waiting' | 'completed';
 
 export interface TaskHistory {
   id: string;

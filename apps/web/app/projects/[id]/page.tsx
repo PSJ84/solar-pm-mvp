@@ -2,13 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   Share2,
   MapPin,
   Zap,
-  Calendar,
   CheckCircle2,
   Circle,
   Clock,
@@ -23,6 +22,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn, STATUS_LABELS, formatRelativeTime, getProgressColor } from '@/lib/utils';
 import { projectsApi, stagesApi, tasksApi, templatesApi } from '@/lib/api';
+import { ChecklistPanel } from '@/components/checklist/ChecklistPanel';
 import type { Project, ProjectStage, Task, TaskHistory, TaskStatus } from '@/types';
 import type { TemplateListItemDto } from '@shared/types/template.types';
 
@@ -81,6 +81,15 @@ const normalizeDateInput = (value?: string | null) => {
   return date.toISOString().slice(0, 10);
 };
 
+const isLongMemo = (value?: string | null) => {
+  if (!value) return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+
+  const lineCount = trimmed.split(/\r?\n/).length;
+  return lineCount > 3 || trimmed.length > 120;
+};
+
 export default function ProjectDetailPage() {
   const router = useRouter();
   const params = useParams<{ id?: string | string[] }>();
@@ -89,7 +98,10 @@ export default function ProjectDetailPage() {
   const hasProjectId = Boolean(projectId);
 
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const initialTaskId = searchParams?.get('task') || undefined;
   const [activeStageId, setActiveStageId] = useState<string | null>(null);
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | undefined>();
   const [isCloning, setIsCloning] = useState(false);
   const [stageDates, setStageDates] = useState<Record<StageDateField, string>>({
     startDate: '',
@@ -99,8 +111,15 @@ export default function ProjectDetailPage() {
   const [showHiddenStages, setShowHiddenStages] = useState(false);
   const [showHiddenTasks, setShowHiddenTasks] = useState(false);
   const [taskTitleDrafts, setTaskTitleDrafts] = useState<Record<string, string>>({});
+  const [memoDrafts, setMemoDrafts] = useState<Record<string, string>>({});
+  const [editingMemoMap, setEditingMemoMap] = useState<Record<string, boolean>>({});
+  const [memoExpandedMap, setMemoExpandedMap] = useState<Record<string, boolean>>({});
+  const [checklistExpandedMap, setChecklistExpandedMap] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{ message: string; type?: 'error' | 'info' | 'success' } | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const memoInputRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const taskCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const hasInitializedFromUrlRef = useRef(false);
   const [isAddStageModalOpen, setIsAddStageModalOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
@@ -173,6 +192,46 @@ export default function ProjectDetailPage() {
 
     return recalcProjectData(project, project.stages || []);
   }, [project]);
+
+  useEffect(() => {
+    if (!initialTaskId || !projectWithDerived?.stages) return;
+    if (hasInitializedFromUrlRef.current) return;
+
+    const stageWithTask = projectWithDerived.stages.find((stage) =>
+      stage.tasks?.some((task) => task.id === initialTaskId),
+    );
+
+    if (stageWithTask) {
+      setActiveStageId(stageWithTask.id);
+      setHighlightedTaskId(initialTaskId);
+      hasInitializedFromUrlRef.current = true;
+    }
+  }, [initialTaskId, projectWithDerived?.stages]);
+
+  useEffect(() => {
+    if (!projectWithDerived?.stages) return;
+
+    setMemoDrafts((prev) => {
+      const next = { ...prev };
+      projectWithDerived.stages.forEach((stage) => {
+        stage.tasks?.forEach((task) => {
+          if (!editingMemoMap[task.id]) {
+            next[task.id] = task.memo ?? '';
+          }
+        });
+      });
+      return next;
+    });
+  }, [projectWithDerived?.stages, editingMemoMap]);
+
+  useEffect(() => {
+    Object.entries(editingMemoMap).forEach(([taskId, isEditing]) => {
+      if (isEditing) {
+        memoInputRefs.current[taskId]?.focus();
+      }
+    });
+  }, [editingMemoMap]);
+
 
   const visibleStages = useMemo(() => {
     if (!projectWithDerived?.stages) return [] as ProjectStage[];
@@ -358,7 +417,7 @@ export default function ProjectDetailPage() {
     }: {
       taskId: string;
       stageId: string;
-      data: Partial<Pick<Task, 'title' | 'isMandatory' | 'isActive' | 'startDate' | 'completedDate'>>;
+      data: Partial<Pick<Task, 'title' | 'isActive' | 'startDate' | 'completedDate' | 'dueDate' | 'memo'>>;
     }) => {
       const response = await tasksApi.update(taskId, data);
       return response.data;
@@ -368,7 +427,14 @@ export default function ProjectDetailPage() {
       const previousProject = queryClient.getQueryData<Project>(projectQueryKey);
 
       updateStageTasksInCache(stageId, (tasks) =>
-        tasks.map((task) => (task.id === taskId ? { ...task, ...data } : task)),
+        tasks.map((task) =>
+          task.id === taskId
+            ? {
+                ...task,
+                ...data,
+              }
+            : task,
+        ),
       );
 
       return { previousProject };
@@ -485,6 +551,24 @@ export default function ProjectDetailPage() {
     onSettled: () => setIsCloning(false),
   });
 
+  const {
+    mutate: deleteProject,
+    isPending: isDeletingProject,
+  } = useMutation({
+    mutationFn: async () => {
+      await projectsApi.delete(projectId);
+    },
+    onSuccess: () => {
+      showToast('프로젝트가 삭제(보관)되었습니다.', 'success');
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      router.push('/projects');
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.message || '프로젝트 삭제(보관)에 실패했습니다.';
+      showToast(message, 'error');
+    },
+  });
+
   const { mutate: addStageFromTemplate, isPending: isAddingStage } = useMutation({
     mutationFn: async ({ templateId, afterStageId }: { templateId: string; afterStageId?: string }) => {
       const response = await projectsApi.addStageFromTemplate(projectId, { templateId, afterStageId });
@@ -532,10 +616,19 @@ export default function ProjectDetailPage() {
     return visibleStages.find((s) => s.id === activeStageId) || visibleStages[0];
   }, [activeStageId, visibleStages]);
 
-  const visibleTasks: Task[] = useMemo(() => {
+  const activeStageTasks: Task[] = useMemo(() => {
     const tasks = activeStage?.tasks || [];
     return showHiddenTasks ? tasks : tasks.filter((task) => task.isActive !== false);
   }, [activeStage?.tasks, showHiddenTasks]);
+
+  useEffect(() => {
+    if (!highlightedTaskId) return;
+
+    const target = taskCardRefs.current[highlightedTaskId];
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [highlightedTaskId, activeStageTasks.length, activeStageId]);
 
   useEffect(() => {
     if (activeStage) {
@@ -554,17 +647,23 @@ export default function ProjectDetailPage() {
   }, [activeStageId]);
 
   useEffect(() => {
+    setChecklistExpandedMap({});
+  }, [activeStageId]);
+
+  useEffect(() => {
     if (isAddStageModalOpen && templateOptions?.length && !selectedTemplateId) {
       setSelectedTemplateId(templateOptions[0].id);
     }
   }, [isAddStageModalOpen, templateOptions, selectedTemplateId]);
 
-  const taskCounts = useMemo(() => {
+  const activeStageTaskCounts = useMemo(() => {
+    const tasks = activeStage?.tasks || [];
+    const list = showHiddenTasks ? tasks : tasks.filter((task) => task.isActive !== false);
     return {
-      total: projectWithDerived?.totalTasks ?? 0,
-      completed: projectWithDerived?.completedTasks ?? 0,
+      total: list.length,
+      completed: list.filter((task) => task.status === 'completed').length,
     };
-  }, [projectWithDerived?.totalTasks, projectWithDerived?.completedTasks]);
+  }, [activeStage?.tasks, showHiddenTasks]);
 
   const handleStageClick = (stageId: string) => {
     setActiveStageId(stageId);
@@ -579,12 +678,11 @@ export default function ProjectDetailPage() {
     updateTaskFields({ taskId: task.id, stageId: activeStage.id, data: { isActive: !(task.isActive !== false) } });
   };
 
-  const handleTaskMandatoryToggle = (task: Task) => {
-    if (!task?.id || !activeStage?.id) return;
-    updateTaskFields({ taskId: task.id, stageId: activeStage.id, data: { isMandatory: !task.isMandatory } });
-  };
-
-  const handleTaskDateChange = (task: Task, field: 'startDate' | 'completedDate', value: string) => {
+  const handleTaskDateChange = (
+    task: Task,
+    field: 'startDate' | 'completedDate' | 'dueDate',
+    value: string,
+  ) => {
     if (!task?.id || !activeStage?.id) return;
 
     updateTaskFields({
@@ -608,6 +706,74 @@ export default function ProjectDetailPage() {
     if (!nextTitle || nextTitle.trim() === '' || nextTitle === task.title || task.id.startsWith('temp-')) return;
 
     updateTaskFields({ taskId: task.id, stageId: activeStage.id, data: { title: nextTitle.trim() } });
+  };
+
+  const startEditingMemo = (taskId: string) => {
+    setEditingMemoMap((prev) => ({ ...prev, [taskId]: true }));
+  };
+
+  const stopEditingMemo = (taskId: string) => {
+    setEditingMemoMap((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+  };
+
+  const toggleMemoExpanded = (taskId: string) => {
+    setMemoExpandedMap((prev) => ({ ...prev, [taskId]: !prev[taskId] }));
+  };
+
+  const resetMemoExpanded = (taskId: string) => {
+    setMemoExpandedMap((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+  };
+
+  const handleMemoDraftChange = (taskId: string, value: string) => {
+    setMemoDrafts((prev) => ({ ...prev, [taskId]: value }));
+  };
+
+  const handleMemoSave = (task: Task) => {
+    if (!task?.id || !activeStage?.id) {
+      stopEditingMemo(task.id);
+      return;
+    }
+
+    const draft = memoDrafts[task.id] ?? '';
+    const original = task.memo ?? '';
+
+    if (draft.trim() === original.trim()) {
+      stopEditingMemo(task.id);
+      resetMemoExpanded(task.id);
+      return;
+    }
+
+    updateTaskFields(
+      { taskId: task.id, stageId: activeStage.id, data: { memo: draft } },
+      {
+        onSuccess: () => {
+          stopEditingMemo(task.id);
+          resetMemoExpanded(task.id);
+        },
+        onError: () => {
+          stopEditingMemo(task.id);
+          resetMemoExpanded(task.id);
+        },
+      },
+    );
+  };
+
+  const toggleChecklistPanel = (taskId: string) => {
+    setChecklistExpandedMap((prev) => ({ ...prev, [taskId]: !prev[taskId] }));
+  };
+
+  const handleCompletionToggle = (task: Task, checked: boolean) => {
+    if (!task?.id || isUpdatingTask || task.isActive === false) return;
+    const nextStatus: TaskStatus = checked ? 'completed' : 'pending';
+    updateTaskStatus({ taskId: task.id, nextStatus });
   };
 
   const handleStatusToggle = (task: Task) => {
@@ -756,6 +922,26 @@ export default function ProjectDetailPage() {
                   {isCloning || cloneMutation.isPending ? '복제 중...' : '복제'}
                 </span>
               </button>
+              {/* 삭제/보관 버튼 */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!projectId || isDeletingProject) return;
+                  const confirmed = window.confirm(
+                    `${projectWithDerived.name} 프로젝트를 삭제(보관)하시겠습니까?\n\n` +
+                      '- 데이터는 완전히 제거되지 않고 복구 가능한 상태로 보관됩니다.\n' +
+                      '- 대시보드와 프로젝트 목록에서 더 이상 표시되지 않습니다.',
+                  );
+
+                  if (!confirmed) return;
+                  deleteProject();
+                }}
+                disabled={isDeletingProject}
+                className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDeletingProject ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                <span className="hidden sm:inline">삭제/보관</span>
+              </button>
             </div>
           </div>
         </div>
@@ -867,7 +1053,7 @@ export default function ProjectDetailPage() {
                       {activeStage?.template?.name || '태스크 목록'}
                     </h3>
                     <p className="text-sm text-slate-500">
-                      전체 {taskCounts.total}개 · 완료 {taskCounts.completed}개
+                      전체 {activeStageTaskCounts.total}개 · 완료 {activeStageTaskCounts.completed}개
                     </p>
                   </div>
                   <label className="flex items-center gap-2 text-sm text-slate-600">
@@ -925,78 +1111,134 @@ export default function ProjectDetailPage() {
               </div>
 
               <div className="divide-y divide-slate-100">
-                {visibleTasks.length ? (
-                  visibleTasks.map((task, index) => {
+                {activeStageTasks.length ? (
+                  activeStageTasks.map((task, index) => {
                     const statusConfig = STATUS_LABELS[task.status];
                     const isTaskActive = task.isActive !== false;
                     const titleValue = taskTitleDrafts[task.id] ?? task.title;
+                    const isEditingMemo = editingMemoMap[task.id] === true;
+                    const memoDraft = memoDrafts[task.id] ?? task.memo ?? '';
+                    const isMemoExpanded = memoExpandedMap[task.id] === true;
+                    const memoIsLong = isLongMemo(task.memo);
+                    const isHighlighted = highlightedTaskId === task.id;
 
                     return (
                       <div
                         key={task.id}
+                        ref={(el) => {
+                          taskCardRefs.current[task.id] = el;
+                        }}
                         className={cn(
-                          'flex flex-col gap-3 px-5 py-4 hover:bg-slate-50 transition-colors sm:flex-row sm:items-center sm:gap-4',
+                          'flex flex-col gap-3 px-5 py-4 hover:bg-slate-50 transition-colors rounded-lg border border-transparent',
                           !isTaskActive && showHiddenTasks && 'opacity-60',
+                          isHighlighted && 'border-indigo-400 bg-indigo-50/70 shadow-sm',
                         )}
                       >
-                        <div className="flex-1 min-w-0 space-y-2">
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">{`#${index + 1}`}</span>
-                            {statusConfig && (
-                              <span className={cn('px-2 py-0.5 rounded-full font-medium', statusConfig.color)}>
-                                {statusConfig.label}
-                              </span>
-                            )}
-                            {!isTaskActive && showHiddenTasks && (
-                              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">숨김</span>
-                            )}
-                            {task.isMandatory && (
-                              <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700">필수</span>
-                            )}
+                        <div className="flex flex-col gap-3 w-full">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={task.status === 'completed'}
+                                  onChange={(e) => handleCompletionToggle(task, e.target.checked)}
+                                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                  disabled={isUpdatingTask || !isTaskActive || isSavingTaskFields}
+                                />
+                                <span>완료</span>
+                              </label>
+
+                              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={isTaskActive}
+                                  onChange={() => handleTaskActiveToggle(task)}
+                                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                  disabled={isSavingTaskFields}
+                                />
+                                <span>활성</span>
+                              </label>
+
+                              <div className="flex-1 min-w-0 space-y-1">
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                  <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">{`#${index + 1}`}</span>
+                                  {task.isMandatory && (
+                                    <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700">필수</span>
+                                  )}
+                                  {statusConfig && (
+                                    <span className={cn('px-2 py-0.5 rounded-full font-medium', statusConfig.color)}>
+                                      {statusConfig.label}
+                                    </span>
+                                  )}
+                                  {task.checklistSummary && task.checklistSummary.total > 0 && (
+                                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                                      📋 {task.checklistSummary.completed}/{task.checklistSummary.total}
+                                    </span>
+                                  )}
+                                  {!isTaskActive && showHiddenTasks && (
+                                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">숨김</span>
+                                  )}
+                                </div>
+
+                                <input
+                                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  value={titleValue}
+                                  onChange={(e) => handleTaskTitleChange(task.id, e.target.value)}
+                                  onBlur={() => handleTaskTitleBlur(task)}
+                                  placeholder="태스크 이름"
+                                  disabled={isSavingTaskFields}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 self-start">
+                              <button
+                                type="button"
+                                disabled={isUpdatingTask || !isTaskActive || isSavingTaskFields}
+                                onClick={() => handleStatusToggle(task)}
+                                className="inline-flex items-center gap-1 px-3 py-2 text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:opacity-50"
+                              >
+                                {task.status === 'completed' ? (
+                                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                ) : task.status === 'in_progress' ? (
+                                  <Clock className="h-4 w-4 text-blue-500" />
+                                ) : (
+                                  <Circle className="h-4 w-4 text-slate-400" />
+                                )}
+                                <span>상태</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => toggleChecklistPanel(task.id)}
+                                className="inline-flex items-center gap-1 px-3 py-2 text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg"
+                              >
+                                <span role="img" aria-label="checklist">
+                                  📋
+                                </span>
+                                <span>체크리스트</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTask(task)}
+                                disabled={isDeletingTask || isSavingTaskFields}
+                                className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                                aria-label={`${task.title} 삭제`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
 
-                          <input
-                            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            value={titleValue}
-                            onChange={(e) => handleTaskTitleChange(task.id, e.target.value)}
-                            onBlur={() => handleTaskTitleBlur(task)}
-                            placeholder="태스크 이름"
-                            disabled={isSavingTaskFields}
-                          />
-
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700">
-                            <label className="inline-flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
+                            <label className="flex items-center gap-2">
+                              <span>기한</span>
                               <input
-                                type="checkbox"
-                                checked={task.isMandatory}
-                                onChange={() => handleTaskMandatoryToggle(task)}
-                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                disabled={isSavingTaskFields}
+                                type="date"
+                                value={normalizeDateInput(task.dueDate)}
+                                onChange={(e) => handleTaskDateChange(task, 'dueDate', e.target.value)}
+                                className="rounded border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               />
-                              <span>필수</span>
                             </label>
-                            <label className="inline-flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={isTaskActive}
-                                onChange={() => handleTaskActiveToggle(task)}
-                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                disabled={isSavingTaskFields}
-                              />
-                              <span>활성</span>
-                            </label>
-                            {task.dueDate && (
-                              <span className="flex items-center gap-1 text-xs text-slate-500">
-                                <Calendar className="h-3.5 w-3.5" />
-                                {new Date(task.dueDate).toLocaleDateString('ko-KR')}
-                              </span>
-                            )}
-                            {task.assignee?.name && (
-                              <span className="text-xs text-slate-500">담당: {task.assignee.name}</span>
-                            )}
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-2">
                             <label className="flex items-center gap-2">
                               <span>시작일</span>
                               <input
@@ -1016,33 +1258,66 @@ export default function ProjectDetailPage() {
                               />
                             </label>
                           </div>
-                        </div>
 
-                        <div className="flex items-center gap-2 self-end sm:self-center">
-                          <button
-                            type="button"
-                            disabled={isUpdatingTask || !isTaskActive || isSavingTaskFields}
-                            onClick={() => handleStatusToggle(task)}
-                            className="inline-flex items-center gap-1 px-3 py-2 text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:opacity-50"
-                          >
-                            {task.status === 'completed' ? (
-                              <CheckCircle2 className="h-4 w-4 text-green-500" />
-                            ) : task.status === 'in_progress' ? (
-                              <Clock className="h-4 w-4 text-blue-500" />
+                          <div className="space-y-1">
+                            <label className="block text-xs font-medium text-slate-500">메모</label>
+                            {!isEditingMemo ? (
+                              <div className="space-y-1">
+                                <div
+                                  className={cn(
+                                    'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 bg-white/70 cursor-text whitespace-pre-line',
+                                    memoIsLong && !isMemoExpanded ? 'line-clamp-3' : '',
+                                    !task.memo || task.memo.trim().length === 0 ? 'text-slate-400' : '',
+                                  )}
+                                  onClick={() => {
+                                    startEditingMemo(task.id);
+                                    handleMemoDraftChange(task.id, task.memo ?? '');
+                                  }}
+                                >
+                                  {task.memo && task.memo.trim().length > 0
+                                    ? task.memo
+                                    : '메모를 입력해 주세요.'}
+                                </div>
+                                {memoIsLong && (
+                                  <button
+                                    type="button"
+                                    className="text-xs text-blue-600 hover:underline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleMemoExpanded(task.id);
+                                    }}
+                                  >
+                                    {isMemoExpanded ? '간략히' : '자세히'}
+                                  </button>
+                                )}
+                              </div>
                             ) : (
-                              <Circle className="h-4 w-4 text-slate-400" />
+                              <textarea
+                                ref={(el) => {
+                                  memoInputRefs.current[task.id] = el;
+                                }}
+                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                                value={memoDraft}
+                                rows={3}
+                                onChange={(e) => handleMemoDraftChange(task.id, e.target.value)}
+                                onBlur={() => handleMemoSave(task)}
+                                onKeyDown={(e) => {
+                                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                                    e.preventDefault();
+                                    e.currentTarget.blur();
+                                  }
+                                }}
+                                placeholder="메모를 입력해 주세요."
+                                disabled={isSavingTaskFields}
+                              />
                             )}
-                            <span>상태</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteTask(task)}
-                            disabled={isDeletingTask || isSavingTaskFields}
-                            className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
-                            aria-label={`${task.title} 삭제`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          </div>
+
+                          {checklistExpandedMap[task.id] && (
+                            <div className="pt-2">
+                              <ChecklistPanel taskId={task.id} defaultExpanded />
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
