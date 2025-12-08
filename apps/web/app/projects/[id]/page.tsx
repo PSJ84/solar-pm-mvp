@@ -80,6 +80,15 @@ const normalizeDateInput = (value?: string | null) => {
   return date.toISOString().slice(0, 10);
 };
 
+const isLongMemo = (value?: string | null) => {
+  if (!value) return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+
+  const lineCount = trimmed.split(/\r?\n/).length;
+  return lineCount > 3 || trimmed.length > 120;
+};
+
 export default function ProjectDetailPage() {
   const router = useRouter();
   const params = useParams<{ id?: string | string[] }>();
@@ -100,6 +109,7 @@ export default function ProjectDetailPage() {
   const [taskTitleDrafts, setTaskTitleDrafts] = useState<Record<string, string>>({});
   const [memoDrafts, setMemoDrafts] = useState<Record<string, string>>({});
   const [editingMemoMap, setEditingMemoMap] = useState<Record<string, boolean>>({});
+  const [memoExpandedMap, setMemoExpandedMap] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{ message: string; type?: 'error' | 'info' | 'success' } | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const memoInputRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
@@ -384,12 +394,9 @@ export default function ProjectDetailPage() {
     }: {
       taskId: string;
       stageId: string;
-      data: Partial<Pick<Task, 'title' | 'isActive' | 'startDate' | 'completedDate' | 'dueDate'>> & {
-        note?: string | null;
-      };
+      data: Partial<Pick<Task, 'title' | 'isActive' | 'startDate' | 'completedDate' | 'dueDate' | 'memo'>>;
     }) => {
-      const payload = 'note' in data ? { ...data, note: data.note } : data;
-      const response = await tasksApi.update(taskId, payload);
+      const response = await tasksApi.update(taskId, data);
       return response.data;
     },
     onMutate: async ({ taskId, stageId, data }) => {
@@ -402,7 +409,6 @@ export default function ProjectDetailPage() {
             ? {
                 ...task,
                 ...data,
-                ...(data.note !== undefined ? { memo: data.note } : {}),
               }
             : task,
         ),
@@ -658,6 +664,10 @@ export default function ProjectDetailPage() {
     });
   };
 
+  const toggleMemoExpanded = (taskId: string) => {
+    setMemoExpandedMap((prev) => ({ ...prev, [taskId]: !prev[taskId] }));
+  };
+
   const handleMemoDraftChange = (taskId: string, value: string) => {
     setMemoDrafts((prev) => ({ ...prev, [taskId]: value }));
   };
@@ -677,7 +687,7 @@ export default function ProjectDetailPage() {
     }
 
     updateTaskFields(
-      { taskId: task.id, stageId: activeStage.id, data: { note: draft } },
+      { taskId: task.id, stageId: activeStage.id, data: { memo: draft } },
       {
         onSuccess: () => {
           stopEditingMemo(task.id);
@@ -1017,6 +1027,8 @@ export default function ProjectDetailPage() {
                     const titleValue = taskTitleDrafts[task.id] ?? task.title;
                     const isEditingMemo = editingMemoMap[task.id] === true;
                     const memoDraft = memoDrafts[task.id] ?? task.memo ?? '';
+                    const isMemoExpanded = memoExpandedMap[task.id] === true;
+                    const showMemoToggle = task.memo && isLongMemo(task.memo);
 
                     return (
                       <div
@@ -1139,17 +1151,33 @@ export default function ProjectDetailPage() {
                           <div className="space-y-1">
                             <label className="block text-xs font-medium text-slate-500">메모</label>
                             {!isEditingMemo ? (
-                              <div
-                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 bg-white/70 cursor-text"
-                                onClick={() => {
-                                  startEditingMemo(task.id);
-                                  handleMemoDraftChange(task.id, task.memo ?? '');
-                                }}
-                              >
-                                {task.memo && task.memo.trim().length > 0 ? (
-                                  <span>{task.memo}</span>
-                                ) : (
-                                  <span className="text-slate-400">메모를 입력해 주세요</span>
+                              <div className="space-y-1">
+                                <div
+                                  className={cn(
+                                    'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 bg-white/70 cursor-text whitespace-pre-line',
+                                    showMemoToggle && !isMemoExpanded ? 'line-clamp-3' : '',
+                                    !task.memo || task.memo.trim().length === 0 ? 'text-slate-400' : '',
+                                  )}
+                                  onClick={() => {
+                                    startEditingMemo(task.id);
+                                    handleMemoDraftChange(task.id, task.memo ?? '');
+                                  }}
+                                >
+                                  {task.memo && task.memo.trim().length > 0
+                                    ? task.memo
+                                    : '메모를 입력해 주세요.'}
+                                </div>
+                                {showMemoToggle && (
+                                  <button
+                                    type="button"
+                                    className="text-xs text-blue-600 hover:underline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleMemoExpanded(task.id);
+                                    }}
+                                  >
+                                    {isMemoExpanded ? '간략히' : '자세히'}
+                                  </button>
                                 )}
                               </div>
                             ) : (
@@ -1157,17 +1185,18 @@ export default function ProjectDetailPage() {
                                 ref={(el) => {
                                   memoInputRefs.current[task.id] = el;
                                 }}
-                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
                                 value={memoDraft}
                                 rows={3}
                                 onChange={(e) => handleMemoDraftChange(task.id, e.target.value)}
                                 onBlur={() => handleMemoSave(task)}
                                 onKeyDown={(e) => {
                                   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                                    e.preventDefault();
                                     e.currentTarget.blur();
                                   }
                                 }}
-                                placeholder="태스크에 대한 메모를 입력하세요"
+                                placeholder="메모를 입력해 주세요."
                                 disabled={isSavingTaskFields}
                               />
                             )}
