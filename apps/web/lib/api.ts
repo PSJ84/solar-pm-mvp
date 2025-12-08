@@ -1,6 +1,7 @@
 // apps/web/lib/api.ts
 import axios from 'axios';
 import type { TemplateDetailDto, TemplateListItemDto } from '@shared/types/template.types';
+import type { MyWorkTaskDto } from '@/types/dashboard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -102,6 +103,10 @@ export const authApi = {
 export const dashboardApi = {
   // [v1.1] 통합 Summary API
   getFullSummary: () => api.get<DashboardFullSummary>('/dashboard/full-summary'),
+  getMyWork: (tab?: string) =>
+    api.get<MyWorkTaskDto[]>('/dashboard/my-work', {
+      params: tab ? { tab } : {},
+    }),
   // 기존 API들 (하위 호환)
   getSummary: () => api.get('/dashboard/summary'),
   getTodayTasks: () => api.get('/dashboard/today'),
@@ -157,6 +162,7 @@ export const templatesApi = {
   updateStructure: (id: string, data: any) => api.patch<TemplateDetailDto>(`/templates/${id}/structure`, data),
   create: (data: { name: string; description?: string }) => api.post<TemplateDetailDto>('/templates', data),
   delete: (id: string) => api.delete(`/templates/${id}`),
+  reorder: (templateIds: string[]) => api.patch('/templates/reorder', { templateIds }),
 };
 
 // Share Links
