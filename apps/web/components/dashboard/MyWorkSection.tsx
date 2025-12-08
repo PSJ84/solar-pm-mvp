@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { dashboardApi } from '@/lib/api';
 import { cn, formatDate } from '@/lib/utils';
 import type { MyWorkTab, MyWorkTaskDto, TaskStatus } from '@/types/dashboard';
@@ -55,6 +56,7 @@ function formatDDay(dDay: number | null | undefined): string | null {
 
 export function MyWorkSection() {
   const [tab, setTab] = useState<MyWorkTab>('today');
+  const router = useRouter();
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery<MyWorkTaskDto[]>({
     queryKey: ['dashboard', 'my-work', tab],
@@ -119,10 +121,24 @@ export function MyWorkSection() {
           const dDayLabel = formatDDay(task.dDay);
           const dueDateLabel = task.dueDate ? formatDate(task.dueDate, 'yyyy.MM.dd') : null;
 
+          const handleCardClick = () => {
+            if (!task.projectId) return;
+            router.push(`/projects/${task.projectId}?task=${task.taskId}`);
+          };
+
           return (
             <div
               key={task.taskId}
-              className="flex flex-col md:flex-row md:items-center justify-between gap-2 p-3 rounded-lg border border-slate-200 bg-slate-50/60"
+              role="button"
+              tabIndex={0}
+              onClick={handleCardClick}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleCardClick();
+                }
+              }}
+              className="flex flex-col md:flex-row md:items-center justify-between gap-2 p-3 rounded-lg border border-slate-200 bg-slate-50/60 cursor-pointer hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-300"
             >
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
