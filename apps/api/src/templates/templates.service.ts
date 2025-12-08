@@ -139,6 +139,30 @@ export class TemplatesService {
     return this.toTemplateDetail({ ...template, taskTemplates: [] });
   }
 
+  /**
+   * 템플릿 순서 재정렬
+   */
+  async reorder(templateIds: string[], companyId?: string) {
+    const resolvedCompanyId = await this.resolveCompanyId(companyId);
+
+    const tx = templateIds.map((id, index) =>
+      this.prisma.stageTemplate.update({
+        where: { id },
+        data: { order: index },
+      }),
+    );
+
+    if (tx.length > 0) {
+      await this.prisma.$transaction(tx);
+    }
+
+    return this.prisma.stageTemplate.findMany({
+      where: { companyId: resolvedCompanyId, deletedAt: null },
+      include: { taskTemplates: { where: { deletedAt: null } } },
+      orderBy: { order: 'asc' },
+    });
+  }
+
   async softDelete(id: string, companyId?: string): Promise<void> {
     const resolvedCompanyId = await this.resolveCompanyId(companyId);
     const template = await this.prisma.stageTemplate.findFirst({
