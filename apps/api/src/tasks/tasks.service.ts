@@ -321,6 +321,141 @@ export class TasksService {
   }
 
   /**
+   * 단계에서 추가 가능한 태스크 템플릿 목록 조회
+   */
+  async getAvailableTaskTemplates(stageId: string) {
+    const stage = await this.prisma.projectStage.findUnique({
+      where: { id: stageId, deletedAt: null },
+      include: {
+        template: {
+          include: {
+            taskTemplates: {
+              where: { deletedAt: null },
+              include: {
+                checklistTemplate: {
+                  include: {
+                    _count: { select: { items: true } },
+                  },
+                },
+              },
+              orderBy: { order: 'asc' },
+            },
+          },
+        },
+        tasks: {
+          where: { deletedAt: null },
+          select: { title: true },
+        },
+      },
+    });
+
+    if (!stage) {
+      throw new NotFoundException('단계를 찾을 수 없습니다.');
+    }
+
+    const existingTitles = new Set(stage.tasks.map((task) => task.title));
+
+    const templates =
+      stage.template?.taskTemplates.map((template) => ({
+        id: template.id,
+        title: template.title,
+        description: template.description,
+        isMandatory: template.isMandatory,
+        defaultDueDays: template.defaultDueDays,
+        alreadyAdded: existingTitles.has(template.title),
+        checklistTemplate: template.checklistTemplate
+          ? {
+              id: template.checklistTemplate.id,
+              name: template.checklistTemplate.name,
+              itemCount: template.checklistTemplate._count?.items || 0,
+            }
+          : null,
+      })) || [];
+
+    return {
+      stageId,
+      stageName: stage.template?.name || '',
+      templates,
+    };
+  }
+
+  /**
+   * 템플릿에서 태스크 생성 (체크리스트 자동 복사)
+   */
+  async createTaskFromTemplate(stageId: string, taskTemplateId: string) {
+    const template = await this.prisma.taskTemplate.findUnique({
+      where: { id: taskTemplateId, deletedAt: null },
+      include: {
+        checklistTemplate: {
+          include: {
+            items: {
+              orderBy: { order: 'asc' },
+            },
+          },
+        },
+      },
+    });
+
+    if (!template) {
+      throw new NotFoundException('태스크 템플릿을 찾을 수 없습니다.');
+    }
+
+    const stage = await this.prisma.projectStage.findUnique({
+      where: { id: stageId, deletedAt: null },
+      include: { project: true },
+    });
+
+    if (!stage) {
+      throw new NotFoundException('단계를 찾을 수 없습니다.');
+    }
+
+    let dueDate: Date | null = null;
+    if (template.defaultDueDays && stage.startDate) {
+      const base = new Date(stage.startDate);
+      base.setDate(base.getDate() + template.defaultDueDays);
+      dueDate = base;
+    }
+
+    const task = await this.prisma.task.create({
+      data: {
+        title: template.title,
+        description: template.description,
+        isMandatory: template.isMandatory,
+        isActive: template.isDefaultActive ?? true,
+        dueDate,
+        status: TaskStatus.PENDING,
+        templateId: template.id,
+        projectStage: { connect: { id: stageId } },
+      },
+      include: {
+        checklistItems: {
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+
+    if (template.checklistTemplate?.items?.length) {
+      await this.prisma.checklistItem.createMany({
+        data: template.checklistTemplate.items.map((item, index) => ({
+          taskId: task.id,
+          title: item.title,
+          status: 'pending',
+          order: index,
+        })),
+      });
+    }
+
+    return this.prisma.task.findUnique({
+      where: { id: task.id },
+      include: {
+        checklistItems: {
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+  }
+
+  /**
    * 태스크 삭제
    */
   async remove(id: string, userId?: string) {

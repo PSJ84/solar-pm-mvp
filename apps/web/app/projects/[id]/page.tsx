@@ -23,6 +23,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn, STATUS_LABELS, formatRelativeTime, getProgressColor } from '@/lib/utils';
 import { projectsApi, stagesApi, tasksApi, templatesApi } from '@/lib/api';
 import { ChecklistPanel } from '@/components/checklist/ChecklistPanel';
+import { AddTaskModal } from '@/components/tasks/AddTaskModal';
 import type { Project, ProjectStage, Task, TaskHistory, TaskStatus } from '@/types';
 import type { TemplateListItemDto } from '@shared/types/template.types';
 
@@ -114,6 +115,7 @@ export default function ProjectDetailPage() {
   const [memoDrafts, setMemoDrafts] = useState<Record<string, string>>({});
   const [editingMemoMap, setEditingMemoMap] = useState<Record<string, boolean>>({});
   const [memoExpandedMap, setMemoExpandedMap] = useState<Record<string, boolean>>({});
+  const [addTaskModalStageId, setAddTaskModalStageId] = useState<string | null>(null);
   const [checklistExpandedMap, setChecklistExpandedMap] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState<{ message: string; type?: 'error' | 'info' | 'success' } | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -343,66 +345,6 @@ export default function ProjectDetailPage() {
       }
       const message = error?.response?.data?.message || '단계를 표시/숨김 처리하는 데 실패했습니다.';
       showToast(message, 'error');
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: projectQueryKey });
-    },
-  });
-
-  const { mutate: createTask, isPending: isCreatingTask } = useMutation({
-    mutationFn: async ({
-      stageId,
-      payload,
-    }: {
-      stageId: string;
-      payload: Pick<Task, 'title'> & Partial<Pick<Task, 'description' | 'isMandatory' | 'isActive'>>;
-    }) => {
-      const response = await tasksApi.create({ ...payload, projectStageId: stageId });
-      return response.data;
-    },
-    onMutate: async ({ stageId, payload }) => {
-      await queryClient.cancelQueries({ queryKey: projectQueryKey });
-      const previousProject = queryClient.getQueryData<Project>(projectQueryKey);
-      const tempId = `temp-${Date.now()}`;
-
-      const optimisticTask: Task = {
-        id: tempId,
-        title: payload.title || '새 태스크',
-        description: payload.description,
-        isMandatory: payload.isMandatory ?? false,
-        isActive: payload.isActive ?? true,
-        status: 'pending',
-        projectStageId: stageId,
-        _count: { photos: 0, documents: 0 },
-      } as Task;
-
-      updateStageTasksInCache(stageId, (tasks) => [...tasks, optimisticTask]);
-
-      return { previousProject, tempId };
-    },
-    onError: (error: any, _vars, context) => {
-      if (context?.previousProject) {
-        queryClient.setQueryData(projectQueryKey, context.previousProject);
-      }
-      const message = error?.response?.data?.message || '태스크를 추가하는 데 실패했습니다.';
-      showToast(message, 'error');
-    },
-    onSuccess: (task, { stageId }, context) => {
-      const tempId = context?.tempId;
-      updateStageTasksInCache(stageId, (tasks) =>
-        tasks.map((t) => (tempId && t.id === tempId ? { ...task } : t)),
-      );
-      setTaskTitleDrafts((prev) => {
-        const next = { ...prev };
-        if (tempId && prev[tempId] !== undefined) {
-          next[task.id] = prev[tempId];
-          delete next[tempId];
-        } else if (tempId) {
-          delete next[tempId];
-        }
-        return next;
-      });
-      showToast('새 태스크가 추가되었습니다.', 'success');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: projectQueryKey });
@@ -783,8 +725,8 @@ export default function ProjectDetailPage() {
   };
 
   const handleAddTask = () => {
-    if (!activeStage?.id || isCreatingTask) return;
-    createTask({ stageId: activeStage.id, payload: { title: '새 태스크', isMandatory: false, isActive: true } });
+    if (!activeStage?.id) return;
+    setAddTaskModalStageId(activeStage.id);
   };
 
   const handleDeleteTask = (task: Task) => {
@@ -1332,10 +1274,10 @@ export default function ProjectDetailPage() {
                 <button
                   type="button"
                   onClick={handleAddTask}
-                  disabled={!activeStage?.id || isCreatingTask}
+                  disabled={!activeStage?.id}
                   className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {isCreatingTask ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  <Plus className="h-4 w-4" />
                   <span>태스크 추가</span>
                 </button>
               </div>
@@ -1392,6 +1334,15 @@ export default function ProjectDetailPage() {
           </div>
         </div>
       </main>
+
+      {addTaskModalStageId && projectId && (
+        <AddTaskModal
+          stageId={addTaskModalStageId}
+          projectId={projectId}
+          isOpen={Boolean(addTaskModalStageId)}
+          onClose={() => setAddTaskModalStageId(null)}
+        />
+      )}
       {isAddStageModalOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 px-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">

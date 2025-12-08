@@ -137,12 +137,16 @@ export const projectsApi = {
 export const tasksApi = {
   getOne: (id: string) => api.get(`/tasks/${id}`),
   create: (data: any) => api.post('/tasks', data),
+  createFromTemplate: (stageId: string, templateId: string) =>
+    api.post(`/tasks/stages/${stageId}/tasks/from-template/${templateId}`),
   update: (id: string, data: any) => api.patch(`/tasks/${id}`, data),
   updateStatus: (id: string, status: string, comment?: string) =>
     api.patch(`/tasks/${id}/status`, { status, comment }),
   updateActive: (id: string, isActive: boolean) =>
     api.patch(`/tasks/${id}/active`, { isActive }),
   delete: (id: string) => api.delete(`/tasks/${id}`),
+  getAvailableTaskTemplates: (stageId: string) =>
+    api.get(`/tasks/stages/${stageId}/available-templates`),
 };
 
 // Stages

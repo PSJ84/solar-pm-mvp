@@ -164,6 +164,10 @@ model TaskTemplate {
   isDefaultActive Boolean       @default(true)
   defaultDueDays  Int?          // 기준일 대비 D-day (예: -14 = 14일 전)
   order           Int           @default(0)
+
+  // 체크리스트 템플릿 연결 (선택)
+  checklistTemplateId String?
+  checklistTemplate   ChecklistTemplate? @relation(fields: [checklistTemplateId], references: [id])
   
   stageTemplateId String
   stageTemplate   StageTemplate @relation(fields: [stageTemplateId], references: [id], onDelete: Cascade)
@@ -175,6 +179,7 @@ model TaskTemplate {
   updatedAt       DateTime      @updatedAt
 
   @@index([stageTemplateId])
+  @@index([checklistTemplateId])
   @@index([deletedAt])
   @@map("task_templates")
 }
@@ -316,6 +321,7 @@ model ChecklistTemplate {
   description String?
 
   items ChecklistTemplateItem[]
+  taskTemplates   TaskTemplate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
