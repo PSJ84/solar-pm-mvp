@@ -57,7 +57,8 @@ export default function ChecklistTemplateDetailPage() {
   const addItemMutation = useMutation({
     mutationFn: (data: { title: string; hasExpiry: boolean; order: number }) =>
       addChecklistTemplateItem(templateId, data),
-    onSuccess: () => {
+    onSuccess: (createdItem) => {
+      setItems((prev) => [...prev, createdItem].sort((a, b) => a.order - b.order));
       queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
       setNewItemTitle('');
       setNewItemHasExpiry(false);
@@ -290,7 +291,7 @@ export default function ChecklistTemplateDetailPage() {
               className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50"
             >
               <Plus className="h-4 w-4" />
-              추가
+              {addItemMutation.isPending ? '추가 중...' : '추가'}
             </button>
           </div>
         </div>
