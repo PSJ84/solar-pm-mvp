@@ -11,6 +11,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { StagesModule } from './stages/stages.module';
 import { TemplatesModule } from './templates/templates.module';
+import { ChecklistModule } from './checklist/checklist.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { TemplatesModule } from './templates/templates.module';
     DashboardModule,
     StagesModule,
     TemplatesModule,
+    ChecklistModule,
   ],
 })
 export class AppModule {}

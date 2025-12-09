@@ -55,6 +55,18 @@ export class TemplatesController {
     return this.templatesService.create(payload, companyId);
   }
 
+  @Patch('reorder')
+  @ApiOperation({ summary: '체크리스트 템플릿 순서 재정렬' })
+  async reorder(
+    @Body() body: { templateIds: string[] },
+    @Req() req: Request,
+  ) {
+    const user: any = (req as any).user;
+    const companyId = user?.companyId;
+
+    return this.templatesService.reorder(body.templateIds || [], companyId);
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: '체크리스트 템플릿 삭제 (soft delete)' })
   async softDelete(@Param('id') id: string, @Req() req: Request) {
