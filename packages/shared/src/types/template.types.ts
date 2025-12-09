@@ -9,6 +9,8 @@ export interface StageTemplateTaskDto {
   automationCategory?: string;
   order: number;
   defaultDueDays?: number;
+  checklistTemplateId?: string | null;
+  checklistTemplateName?: string | null;
 }
 
 export interface StageTemplateStageDto {

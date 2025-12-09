@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import { AppShell } from '@/components/layout/AppShell';
+import { TaskTemplateChecklistModal } from '@/components/templates/TaskTemplateChecklistModal';
 import { templatesApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 
@@ -67,6 +68,19 @@ export default function TemplateDetailPage() {
   const [templateDescription, setTemplateDescription] = useState<string>('');
   const [stages, setStages] = useState<StageTemplateStageDto[]>([]);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [checklistModalState, setChecklistModalState] = useState<{
+    isOpen: boolean;
+    taskTemplateId: string;
+    taskTemplateName: string;
+    checklistTemplateId: string | null;
+    checklistTemplateName: string | null;
+  }>({
+    isOpen: false,
+    taskTemplateId: '',
+    taskTemplateName: '',
+    checklistTemplateId: null,
+    checklistTemplateName: null,
+  });
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const showToast = (
@@ -79,6 +93,20 @@ export default function TemplateDetailPage() {
     }
     setToast({ message, type });
     toastTimeoutRef.current = setTimeout(() => setToast(null), duration);
+  };
+
+  const openChecklistModal = (task: StageTemplateTaskDto) => {
+    setChecklistModalState({
+      isOpen: true,
+      taskTemplateId: task.id || '',
+      taskTemplateName: task.name,
+      checklistTemplateId: task.checklistTemplateId || null,
+      checklistTemplateName: task.checklistTemplateName || null,
+    });
+  };
+
+  const closeChecklistModal = () => {
+    setChecklistModalState((prev) => ({ ...prev, isOpen: false }));
   };
 
   useEffect(() => {
@@ -295,6 +323,19 @@ export default function TemplateDetailPage() {
             <span>기본 활성</span>
           </label>
         </div>
+
+        <button
+          type="button"
+          onClick={() => openChecklistModal(task)}
+          className={`inline-flex items-center gap-1.5 px-2 py-1 text-sm rounded-md border ${
+            task.checklistTemplateId
+              ? 'border-blue-200 bg-blue-50 text-blue-700'
+              : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <ListChecks className="h-4 w-4" />
+          {task.checklistTemplateId ? task.checklistTemplateName || '체크리스트' : '체크리스트 연결'}
+        </button>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -490,6 +531,15 @@ export default function TemplateDetailPage() {
           </div>
         )}
       </div>
+
+      <TaskTemplateChecklistModal
+        isOpen={checklistModalState.isOpen}
+        onClose={closeChecklistModal}
+        taskTemplateId={checklistModalState.taskTemplateId}
+        taskTemplateName={checklistModalState.taskTemplateName}
+        currentChecklistTemplateId={checklistModalState.checklistTemplateId}
+        currentChecklistTemplateName={checklistModalState.checklistTemplateName}
+      />
     </AppShell>
   );
 }

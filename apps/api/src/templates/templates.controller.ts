@@ -34,6 +34,15 @@ export class TemplatesController {
     return this.templatesService.findOne(id, companyId);
   }
 
+  @Patch('task-templates/:id/checklist-template')
+  @UseGuards(JwtAuthGuard)
+  async linkChecklistTemplate(
+    @Param('id') id: string,
+    @Body() body: { checklistTemplateId: string | null },
+  ) {
+    return this.templatesService.linkChecklistTemplate(id, body.checklistTemplateId);
+  }
+
   @Patch(':id/structure')
   @ApiOperation({ summary: '체크리스트 템플릿 구조 업데이트' })
   async updateStructure(

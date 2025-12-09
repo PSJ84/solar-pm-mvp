@@ -24,7 +24,13 @@ type ProjectStageTemplateDto = any;
 export class TemplatesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toStageDto(template: StageTemplate & { taskTemplates: TaskTemplate[] }): StageTemplateStageDto {
+  private toStageDto(
+    template: StageTemplate & {
+      taskTemplates: (TaskTemplate & {
+        checklistTemplate?: { id: string; name: string; _count?: { items: number } } | null;
+      })[];
+    },
+  ): StageTemplateStageDto {
     return {
       id: template.id,
       name: template.name,
@@ -39,7 +45,11 @@ export class TemplatesService {
     };
   }
 
-  private toTaskDto(task: TaskTemplate): StageTemplateTaskDto {
+  private toTaskDto(
+    task: TaskTemplate & {
+      checklistTemplate?: { id: string; name: string; _count?: { items: number } } | null;
+    },
+  ): StageTemplateTaskDto {
     return {
       id: task.id,
       name: task.title,
@@ -48,10 +58,18 @@ export class TemplatesService {
       isDefaultActive: task.isDefaultActive ?? true,
       defaultDueDays: task.defaultDueDays ?? undefined,
       order: task.order,
+      checklistTemplateId: task.checklistTemplate?.id ?? null,
+      checklistTemplateName: task.checklistTemplate?.name ?? null,
     };
   }
 
-  private toTemplateDetail(template: StageTemplate & { taskTemplates: TaskTemplate[] }): TemplateDetailDto {
+  private toTemplateDetail(
+    template: StageTemplate & {
+      taskTemplates: (TaskTemplate & {
+        checklistTemplate?: { id: string; name: string; _count?: { items: number } } | null;
+      })[];
+    },
+  ): TemplateDetailDto {
     const stage = this.toStageDto(template);
 
     return {
@@ -107,6 +125,11 @@ export class TemplatesService {
         taskTemplates: {
           where: { deletedAt: null },
           orderBy: { order: 'asc' },
+          include: {
+            checklistTemplate: {
+              select: { id: true, name: true, _count: { select: { items: true } } },
+            },
+          },
         },
       },
     });
@@ -116,6 +139,18 @@ export class TemplatesService {
     }
 
     return this.toTemplateDetail(template);
+  }
+
+  async linkChecklistTemplate(taskTemplateId: string, checklistTemplateId: string | null) {
+    return this.prisma.taskTemplate.update({
+      where: { id: taskTemplateId },
+      data: { checklistTemplateId },
+      include: {
+        checklistTemplate: {
+          include: { items: true },
+        },
+      },
+    });
   }
 
   async create(payload: { name: string; description?: string }, companyId?: string): Promise<TemplateDetailDto> {
@@ -197,7 +232,16 @@ export class TemplatesService {
 
     const template = await this.prisma.stageTemplate.findFirst({
       where: { id, companyId: resolvedCompanyId, deletedAt: null },
-      include: { taskTemplates: { where: { deletedAt: null } } },
+      include: {
+        taskTemplates: {
+          where: { deletedAt: null },
+          include: {
+            checklistTemplate: {
+              select: { id: true, name: true, _count: { select: { items: true } } },
+            },
+          },
+        },
+      },
     });
 
     if (!template) {
@@ -288,7 +332,15 @@ export class TemplatesService {
 
     const refreshed = await this.prisma.stageTemplate.findFirst({
       where: { id: template.id },
-      include: { taskTemplates: true },
+      include: {
+        taskTemplates: {
+          include: {
+            checklistTemplate: {
+              select: { id: true, name: true, _count: { select: { items: true } } },
+            },
+          },
+        },
+      },
     });
 
     if (!refreshed) {
