@@ -164,6 +164,8 @@ export const templatesApi = {
   getAll: () => api.get<TemplateListItemDto[]>('/templates'),
   getOne: (id: string) => api.get<TemplateDetailDto>(`/templates/${id}`),
   updateStructure: (id: string, data: any) => api.patch<TemplateDetailDto>(`/templates/${id}/structure`, data),
+  linkChecklistTemplate: (taskTemplateId: string, checklistTemplateId: string | null) =>
+    api.patch(`/templates/task-templates/${taskTemplateId}/checklist-template`, { checklistTemplateId }),
   create: (data: { name: string; description?: string }) => api.post<TemplateDetailDto>('/templates', data),
   delete: (id: string) => api.delete(`/templates/${id}`),
   reorder: (templateIds: string[]) => api.patch('/templates/reorder', { templateIds }),
