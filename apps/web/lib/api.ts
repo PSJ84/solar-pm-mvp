@@ -1,6 +1,7 @@
 // apps/web/lib/api.ts
 import axios from 'axios';
 import type { TemplateDetailDto, TemplateListItemDto } from '@shared/types/template.types';
+import type { MyWorkTaskDto } from '@/types/dashboard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -102,6 +103,10 @@ export const authApi = {
 export const dashboardApi = {
   // [v1.1] 통합 Summary API
   getFullSummary: () => api.get<DashboardFullSummary>('/dashboard/full-summary'),
+  getMyWork: (tab?: string) =>
+    api.get<MyWorkTaskDto[]>('/dashboard/my-work', {
+      params: tab ? { tab } : {},
+    }),
   // 기존 API들 (하위 호환)
   getSummary: () => api.get('/dashboard/summary'),
   getTodayTasks: () => api.get('/dashboard/today'),
@@ -132,12 +137,16 @@ export const projectsApi = {
 export const tasksApi = {
   getOne: (id: string) => api.get(`/tasks/${id}`),
   create: (data: any) => api.post('/tasks', data),
+  createFromTemplate: (stageId: string, templateId: string) =>
+    api.post(`/tasks/stages/${stageId}/tasks/from-template/${templateId}`),
   update: (id: string, data: any) => api.patch(`/tasks/${id}`, data),
   updateStatus: (id: string, status: string, comment?: string) =>
     api.patch(`/tasks/${id}/status`, { status, comment }),
   updateActive: (id: string, isActive: boolean) =>
     api.patch(`/tasks/${id}/active`, { isActive }),
   delete: (id: string) => api.delete(`/tasks/${id}`),
+  getAvailableTaskTemplates: (stageId: string) =>
+    api.get(`/tasks/stages/${stageId}/available-templates`),
 };
 
 // Stages
@@ -157,6 +166,7 @@ export const templatesApi = {
   updateStructure: (id: string, data: any) => api.patch<TemplateDetailDto>(`/templates/${id}/structure`, data),
   create: (data: { name: string; description?: string }) => api.post<TemplateDetailDto>('/templates', data),
   delete: (id: string) => api.delete(`/templates/${id}`),
+  reorder: (templateIds: string[]) => api.patch('/templates/reorder', { templateIds }),
 };
 
 // Share Links

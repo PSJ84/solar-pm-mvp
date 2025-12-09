@@ -72,4 +72,19 @@ export class TasksController {
     const user = (req as any).user;
     return this.tasksService.remove(id, user?.sub);
   }
+
+  @Get('stages/:stageId/available-templates')
+  @ApiOperation({ summary: '단계에서 추가 가능한 태스크 템플릿 목록' })
+  async getAvailableTemplates(@Param('stageId') stageId: string) {
+    return this.tasksService.getAvailableTaskTemplates(stageId);
+  }
+
+  @Post('stages/:stageId/tasks/from-template/:templateId')
+  @ApiOperation({ summary: '템플릿에서 태스크 생성 (체크리스트 포함)' })
+  async createTaskFromTemplate(
+    @Param('stageId') stageId: string,
+    @Param('templateId') templateId: string,
+  ) {
+    return this.tasksService.createTaskFromTemplate(stageId, templateId);
+  }
 }
