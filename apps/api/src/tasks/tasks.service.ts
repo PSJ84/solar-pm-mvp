@@ -328,10 +328,6 @@ export class TasksService {
       where: { id: stageId, deletedAt: null },
       include: {
         template: { select: { name: true, id: true } },
-        tasks: {
-          where: { deletedAt: null },
-          select: { title: true },
-        },
       },
     });
 
@@ -339,29 +335,17 @@ export class TasksService {
       throw new NotFoundException('단계를 찾을 수 없습니다.');
     }
 
-    const existingTitles = new Set(stage.tasks.map((task) => task.title));
+    const existingTasks = await this.prisma.task.findMany({
+      where: { projectStageId: stageId, deletedAt: null },
+      select: { title: true },
+    });
+
+    const existingTitles = new Set(existingTasks.map((task) => task.title));
 
     const taskTemplates = await this.prisma.taskTemplate.findMany({
       where: { stageTemplateId: stage.templateId, deletedAt: null },
       orderBy: { order: 'asc' },
     });
-
-    const checklistTemplateIds = taskTemplates
-      .map((t) => t.checklistTemplateId)
-      .filter((id): id is string => Boolean(id));
-
-    const checklistTemplates = checklistTemplateIds.length
-      ? await this.prisma.checklistTemplate.findMany({
-          where: { id: { in: checklistTemplateIds } },
-          include: {
-            _count: { select: { items: true } },
-          },
-        })
-      : [];
-
-    const checklistMap = new Map(
-      checklistTemplates.map((ct) => [ct.id, { id: ct.id, name: ct.name, itemCount: ct._count.items }]),
-    );
 
     const templates = taskTemplates.map((template) => ({
       id: template.id,
@@ -370,9 +354,7 @@ export class TasksService {
       isMandatory: template.isMandatory,
       defaultDueDays: template.defaultDueDays,
       alreadyAdded: existingTitles.has(template.title),
-      checklistTemplate: template.checklistTemplateId
-        ? checklistMap.get(template.checklistTemplateId) || null
-        : null,
+      checklistTemplate: null,
     }));
 
     return {
@@ -393,13 +375,6 @@ export class TasksService {
     if (!template) {
       throw new NotFoundException('태스크 템플릿을 찾을 수 없습니다.');
     }
-
-    const checklistTemplate = template.checklistTemplateId
-      ? await this.prisma.checklistTemplate.findUnique({
-          where: { id: template.checklistTemplateId },
-          include: { items: { orderBy: { order: 'asc' } } },
-        })
-      : null;
 
     const stage = await this.prisma.projectStage.findUnique({
       where: { id: stageId, deletedAt: null },
@@ -434,17 +409,6 @@ export class TasksService {
         },
       },
     });
-
-    if (checklistTemplate?.items?.length) {
-      await this.prisma.checklistItem.createMany({
-        data: checklistTemplate.items.map((item, index) => ({
-          taskId: task.id,
-          title: item.title,
-          status: 'pending',
-          order: index,
-        })),
-      });
-    }
 
     return this.prisma.task.findUnique({
       where: { id: task.id },
