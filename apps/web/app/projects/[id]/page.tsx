@@ -25,7 +25,7 @@ import { projectsApi, stagesApi, tasksApi, templatesApi } from '@/lib/api';
 import { ChecklistPanel } from '@/components/checklist/ChecklistPanel';
 import { AddTaskModal } from '@/components/tasks/AddTaskModal';
 import type { Project, ProjectStage, Task, TaskHistory, TaskStatus } from '@/types';
-import type { TemplateListItemDto } from '@shared/types/template.types';
+import type { TemplateListItemDto } from '../../../../../packages/shared/src/types/template.types';
 
 type DerivedStage = ProjectStage & { derivedStatus: string };
 
