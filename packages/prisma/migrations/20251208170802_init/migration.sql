@@ -1,3 +1,6 @@
+-- CreateEnum
+CREATE TYPE "TaskStatus" AS ENUM ('pending', 'in_progress', 'waiting', 'completed', 'delayed');
+
 -- CreateTable
 CREATE TABLE "users" (
     "id" TEXT NOT NULL,
@@ -54,6 +57,7 @@ CREATE TABLE "stage_templates" (
     "name" TEXT NOT NULL,
     "description" TEXT,
     "order" INTEGER NOT NULL DEFAULT 0,
+    "isDefaultActive" BOOLEAN NOT NULL DEFAULT true,
     "companyId" TEXT NOT NULL,
     "deletedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -68,6 +72,7 @@ CREATE TABLE "task_templates" (
     "title" TEXT NOT NULL,
     "description" TEXT,
     "isMandatory" BOOLEAN NOT NULL DEFAULT false,
+    "isDefaultActive" BOOLEAN NOT NULL DEFAULT true,
     "defaultDueDays" INTEGER,
     "order" INTEGER NOT NULL DEFAULT 0,
     "stageTemplateId" TEXT NOT NULL,
@@ -82,8 +87,12 @@ CREATE TABLE "task_templates" (
 CREATE TABLE "project_stages" (
     "id" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'pending',
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
     "startedAt" TIMESTAMP(3),
     "completedAt" TIMESTAMP(3),
+    "startDate" TIMESTAMP(3),
+    "receivedDate" TIMESTAMP(3),
+    "completedDate" TIMESTAMP(3),
     "projectId" TEXT NOT NULL,
     "templateId" TEXT NOT NULL,
     "deletedAt" TIMESTAMP(3),
@@ -98,8 +107,17 @@ CREATE TABLE "tasks" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT,
+    "status" "TaskStatus" NOT NULL DEFAULT 'pending',
+    "memo" TEXT,
+    "note" TEXT,
+    "waitingFor" TEXT,
     "dueDate" TIMESTAMP(3),
-    "status" TEXT NOT NULL DEFAULT 'pending',
+    "startDate" TIMESTAMP(3),
+    "completedDate" TIMESTAMP(3),
+    "startedAt" TIMESTAMP(3),
+    "completedAt" TIMESTAMP(3),
+    "lastStatusChangedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
     "isMandatory" BOOLEAN NOT NULL DEFAULT false,
     "assigneeId" TEXT,
     "projectStageId" TEXT NOT NULL,
@@ -110,6 +128,46 @@ CREATE TABLE "tasks" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "tasks_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "checklist_items" (
+    "id" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "memo" TEXT,
+    "order" INTEGER NOT NULL DEFAULT 0,
+    "issuedAt" TIMESTAMP(3),
+    "expiresAt" TIMESTAMP(3),
+    "fileUrl" TEXT,
+    "fileName" TEXT,
+    "taskId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "checklist_items_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "checklist_templates" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "checklist_templates_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "checklist_template_items" (
+    "id" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "order" INTEGER NOT NULL DEFAULT 0,
+    "hasExpiry" BOOLEAN NOT NULL DEFAULT false,
+    "templateId" TEXT NOT NULL,
+
+    CONSTRAINT "checklist_template_items_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -251,6 +309,9 @@ CREATE INDEX "projects_externalId_idx" ON "projects"("externalId");
 CREATE INDEX "projects_deletedAt_idx" ON "projects"("deletedAt");
 
 -- CreateIndex
+CREATE INDEX "stage_templates_companyId_order_idx" ON "stage_templates"("companyId", "order");
+
+-- CreateIndex
 CREATE INDEX "stage_templates_companyId_idx" ON "stage_templates"("companyId");
 
 -- CreateIndex
@@ -290,7 +351,16 @@ CREATE INDEX "tasks_dueDate_idx" ON "tasks"("dueDate");
 CREATE INDEX "tasks_status_idx" ON "tasks"("status");
 
 -- CreateIndex
+CREATE INDEX "tasks_status_dueDate_idx" ON "tasks"("status", "dueDate");
+
+-- CreateIndex
 CREATE INDEX "tasks_deletedAt_idx" ON "tasks"("deletedAt");
+
+-- CreateIndex
+CREATE INDEX "checklist_items_taskId_idx" ON "checklist_items"("taskId");
+
+-- CreateIndex
+CREATE INDEX "checklist_template_items_templateId_idx" ON "checklist_template_items"("templateId");
 
 -- CreateIndex
 CREATE INDEX "task_histories_taskId_idx" ON "task_histories"("taskId");
@@ -381,6 +451,12 @@ ALTER TABLE "tasks" ADD CONSTRAINT "tasks_assigneeId_fkey" FOREIGN KEY ("assigne
 
 -- AddForeignKey
 ALTER TABLE "tasks" ADD CONSTRAINT "tasks_projectStageId_fkey" FOREIGN KEY ("projectStageId") REFERENCES "project_stages"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "checklist_items" ADD CONSTRAINT "checklist_items_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "tasks"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "checklist_template_items" ADD CONSTRAINT "checklist_template_items_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES "checklist_templates"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "task_histories" ADD CONSTRAINT "task_histories_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "tasks"("id") ON DELETE CASCADE ON UPDATE CASCADE;

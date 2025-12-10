@@ -54,15 +54,15 @@ export default function ChecklistTemplateDetailPage() {
     },
   });
 
-  const addItemMutation = useMutation({
-    mutationFn: (data: { title: string; hasExpiry: boolean; order: number }) =>
-      addChecklistTemplateItem(templateId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
-      setNewItemTitle('');
-      setNewItemHasExpiry(false);
-    },
-  });
+const addItemMutation = useMutation({
+  mutationFn: (data: { title: string; order?: number; hasExpiry?: boolean }) =>
+    addChecklistTemplateItem(templateId, data),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
+    setNewItemTitle('');
+    setNewItemHasExpiry(false);
+  },
+});
 
   const updateItemMutation = useMutation({
     mutationFn: ({ itemId, data }: { itemId: string; data: { title?: string; hasExpiry?: boolean } }) =>
@@ -92,10 +92,14 @@ export default function ChecklistTemplateDetailPage() {
     updateTemplateMutation.mutate({ name, description: description || undefined });
   };
 
-  const handleAddItem = () => {
-    if (!templateId || !newItemTitle.trim()) return;
-    addItemMutation.mutate({ title: newItemTitle.trim(), hasExpiry: newItemHasExpiry, order: items.length });
-  };
+const handleAddItem = () => {
+  if (!newItemTitle.trim()) return;
+  addItemMutation.mutate({
+    title: newItemTitle.trim(),
+    hasExpiry: newItemHasExpiry,
+    order: items.length,
+  });
+};
 
   const handleUpdateItem = (itemId: string) => {
     if (!editingTitle.trim()) return;
