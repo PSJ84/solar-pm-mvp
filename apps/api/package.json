@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+  "prebuild": "prisma generate --schema=../../packages/prisma/schema.prisma",
   "dev": "ts-node -r tsconfig-paths/register src/main.ts",
   "build": "nest build",
   "start": "node dist/apps/api/src/main.js",
