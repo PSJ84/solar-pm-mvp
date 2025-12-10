@@ -8,7 +8,7 @@ import { CalendarClock, ChevronDown, ChevronUp, Layers, ListChecks, Plus, Trash2
 import { AppShell } from '@/components/layout/AppShell';
 import { templatesApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
-import type { TemplateListItemDto } from '@shared/types/template.types';
+import type { TemplateListItemDto } from '../../../../packages/shared/src/types/template.types';
 
 const TemplateCardSkeleton = () => (
   <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col gap-3 animate-pulse">
