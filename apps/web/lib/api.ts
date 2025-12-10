@@ -1,6 +1,6 @@
 // apps/web/lib/api.ts
 import axios from 'axios';
-import type { TemplateDetailDto, TemplateListItemDto } from '@shared/types/template.types';
+import type { TemplateDetailDto, TemplateListItemDto } from '../../../packages/shared/src/types/template.types';
 import type { MyWorkTaskDto } from '@/types/dashboard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
