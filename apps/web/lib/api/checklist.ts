@@ -95,11 +95,17 @@ export async function addChecklistTemplateItem(
 }
 
 // 템플릿 아이템 수정
-export async function updateChecklistTemplateItem(
-  itemId: string,
-  data: { title?: string; order?: number; hasExpiry?: boolean },
+export async function addChecklistTemplateItem(
+  templateId: string,
+  data: { title: string; order?: number; hasExpiry?: boolean },
 ): Promise<ChecklistTemplateItem> {
-  const response = await api.patch(`/checklist-templates/items/${itemId}`, data);
+  // 백엔드 DTO에 맞는 필드만 보낸다
+  const payload = {
+    title: data.title,
+    hasExpiry: data.hasExpiry ?? false,
+  };
+
+  const response = await api.post(`/checklist-templates/${templateId}/items`, payload);
   return response.data;
 }
 
