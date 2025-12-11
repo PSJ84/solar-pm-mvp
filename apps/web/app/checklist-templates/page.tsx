@@ -20,15 +20,18 @@ export default function ChecklistTemplatesPage() {
     queryFn: getChecklistTemplates,
   });
 
-  const createMutation = useMutation({
-    mutationFn: (data: { name: string; description?: string }) => createChecklistTemplate(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['checklist-templates'] });
-      setIsCreateModalOpen(false);
-      setNewName('');
-      setNewDescription('');
-    },
-  });
+const createMutation = useMutation({
+  mutationFn: (data: { name: string; description?: string }) =>
+    createChecklistTemplate({
+      name: data.name,
+      // undefined면 null로 변환해서 백엔드/Prisma 스키마에 맞춰줌
+      description: data.description ?? null,
+    }),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['checklist-templates'] });
+    setIsCreateModalOpen(false);
+  },
+});
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteChecklistTemplate(id),
