@@ -4,9 +4,16 @@ import type { TemplateDetailDto, TemplateListItemDto } from '../../../packages/s
 import type { MyWorkTaskDto } from '@/types/dashboard';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const normalizedApiBase = (() => {
+  const trimmed = API_URL.replace(/\/+$/, '');
+  if (trimmed.endsWith('/api')) {
+    return trimmed;
+  }
+  return `${trimmed}/api`;
+})();
 
 export const api = axios.create({
-  baseURL: `${API_URL}/api`,
+  baseURL: normalizedApiBase,
   headers: {
     'Content-Type': 'application/json',
   },
