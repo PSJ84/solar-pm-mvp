@@ -13,7 +13,7 @@ import { api } from '../api';
 
 // 태스크별 체크리스트 조회
 export async function getChecklist(taskId: string): Promise<ChecklistResponse> {
-  const response = await api.get(`/checklist/${taskId}`);
+  const response = await api.get(`/tasks/${taskId}/checklist`);
   return response.data;
 }
 
@@ -22,7 +22,7 @@ export async function createChecklistItem(
   taskId: string,
   data: { title: string },
 ): Promise<ChecklistItem> {
-  const response = await api.post(`/checklist/${taskId}/items`, data);
+  const response = await api.post(`/tasks/${taskId}/checklist`, data);
   return response.data;
 }
 
@@ -45,7 +45,9 @@ export async function reorderChecklist(
   taskId: string,
   orderedIds: string[],
 ): Promise<void> {
-  await api.post(`/checklist/${taskId}/reorder`, { orderedIds });
+  await api.post(`/tasks/${taskId}/checklist/reorder`, {
+    itemIds: orderedIds,
+  });
 }
 
 // 템플릿 목록 조회 (태스크에서 템플릿 적용용)
@@ -56,12 +58,12 @@ export async function getChecklistTemplates(): Promise<ChecklistTemplate[]> {
 
 // 템플릿을 태스크에 적용
 export async function applyTemplateToTask(
-  taskId: string,
   templateId: string,
+  taskId: string,
 ): Promise<ChecklistResponse> {
-  const response = await api.post(`/checklist/${taskId}/apply-template`, {
-    templateId,
-  });
+  const response = await api.post(
+    `/checklist-templates/${templateId}/apply/${taskId}`,
+  );
   return response.data;
 }
 
@@ -73,7 +75,7 @@ export async function applyTemplateToTask(
 // 템플릿 상세 조회
 export async function getChecklistTemplate(
   templateId: string,
-): Promise<ChecklistTemplate & { items: ChecklistTemplateItem[] }> {
+): Promise<ChecklistTemplate> {
   const response = await api.get(`/checklist-templates/${templateId}`);
   return response.data;
 }
@@ -132,20 +134,22 @@ export async function updateChecklistTemplateItem(
   return response.data;
 }
 
-// 템플릿 항목 삭제
+// 🔥 템플릿 항목 삭제 (여기가 이번 에러 원인)
+// 백엔드 라우트: DELETE /checklist-templates/items/:itemId
 export async function deleteChecklistTemplateItem(
-  templateId: string,
   itemId: string,
 ): Promise<void> {
-  await api.delete(`/checklist-templates/${templateId}/items/${itemId}`);
+  await api.delete(`/checklist-templates/items/${itemId}`);
 }
 
 // 템플릿 항목 순서 변경
 export async function reorderChecklistTemplateItems(
   templateId: string,
   orderedIds: string[],
-): Promise<void> {
-  await api.post(`/checklist-templates/${templateId}/reorder`, {
-    orderedIds,
-  });
+): Promise<ChecklistTemplate> {
+  const response = await api.patch(
+    `/checklist-templates/${templateId}/items/reorder`,
+    { itemIds: orderedIds },
+  );
+  return response.data;
 }
