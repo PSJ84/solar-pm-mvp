@@ -51,40 +51,45 @@ export default function ChecklistTemplateDetailPage() {
       updateChecklistTemplate(templateId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
+      queryClient.invalidateQueries({ queryKey: ['checklist-templates'] });
     },
   });
 
-const addItemMutation = useMutation({
+  const addItemMutation = useMutation({
     mutationFn: (data: { title: string; hasExpiry: boolean; order: number }) =>
       addChecklistTemplateItem(templateId, data),
     onSuccess: (createdItem) => {
       setItems((prev) => [...prev, createdItem].sort((a, b) => a.order - b.order));
       queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
+      queryClient.invalidateQueries({ queryKey: ['checklist-templates'] });
       setNewItemTitle('');
       setNewItemHasExpiry(false);
     },
   });
 
-const updateItemMutation = useMutation({
-  mutationFn: ({ itemId, data }: { itemId: string; data: { title?: string; hasExpiry?: boolean } }) =>
-    updateChecklistTemplateItem(itemId, data),
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
-    setEditingItemId(null);
+  const updateItemMutation = useMutation({
+    mutationFn: ({ itemId, data }: { itemId: string; data: { title?: string; hasExpiry?: boolean } }) =>
+      updateChecklistTemplateItem(itemId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
+      queryClient.invalidateQueries({ queryKey: ['checklist-templates'] });
+      setEditingItemId(null);
     },
   });
 
-const deleteItemMutation = useMutation({
-  mutationFn: (itemId: string) => deleteChecklistTemplateItem(itemId),
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
-  },
-});
+  const deleteItemMutation = useMutation({
+    mutationFn: (itemId: string) => deleteChecklistTemplateItem(itemId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
+      queryClient.invalidateQueries({ queryKey: ['checklist-templates'] });
+    },
+  });
 
   const reorderMutation = useMutation({
     mutationFn: (itemIds: string[]) => reorderChecklistTemplateItems(templateId, itemIds),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
+      queryClient.invalidateQueries({ queryKey: ['checklist-templates'] });
     },
   });
 
@@ -93,14 +98,14 @@ const deleteItemMutation = useMutation({
     updateTemplateMutation.mutate({ name, description: description || undefined });
   };
 
-const handleAddItem = () => {
-  if (!newItemTitle.trim()) return;
-  addItemMutation.mutate({
-    title: newItemTitle.trim(),
-    hasExpiry: newItemHasExpiry,
-    order: items.length,
-  });
-};
+  const handleAddItem = () => {
+    if (!newItemTitle.trim()) return;
+    addItemMutation.mutate({
+      title: newItemTitle.trim(),
+      hasExpiry: newItemHasExpiry,
+      order: items.length,
+    });
+  };
 
   const handleUpdateItem = (itemId: string) => {
     if (!editingTitle.trim()) return;

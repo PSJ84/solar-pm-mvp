@@ -15,6 +15,7 @@ interface TaskTemplateChecklistModalProps {
   taskTemplateName: string;
   currentChecklistTemplateId: string | null;
   currentChecklistTemplateName: string | null;
+  onNotify?: (message: string, type?: 'info' | 'success' | 'error') => void;
 }
 
 export function TaskTemplateChecklistModal({
@@ -24,6 +25,7 @@ export function TaskTemplateChecklistModal({
   taskTemplateName,
   currentChecklistTemplateId,
   currentChecklistTemplateName,
+  onNotify,
 }: TaskTemplateChecklistModalProps) {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -50,7 +52,11 @@ export function TaskTemplateChecklistModal({
       onClose();
     },
     onError: () => {
-      alert('체크리스트 템플릿 연결 중 오류가 발생했습니다.');
+      if (onNotify) {
+        onNotify('체크리스트 템플릿 연결 중 오류가 발생했습니다.', 'error');
+      } else {
+        alert('체크리스트 템플릿 연결 중 오류가 발생했습니다.');
+      }
     },
   });
 
@@ -62,10 +68,17 @@ export function TaskTemplateChecklistModal({
 
     // 아직 DB에 저장되지 않은 임시 태스크 (id가 temp-로 시작) 는 막기
     if (taskTemplateId.startsWith('temp-')) {
-      alert(
-        '이 태스크는 아직 저장되지 않았습니다.\n' +
-          '템플릿을 먼저 저장한 후 체크리스트를 연결해 주세요.',
-      );
+      if (onNotify) {
+        onNotify(
+          '이 태스크는 아직 저장되지 않았습니다. 템플릿을 먼저 저장한 후 체크리스트를 연결해 주세요.',
+          'error',
+        );
+      } else {
+        alert(
+          '이 태스크는 아직 저장되지 않았습니다.\n' +
+            '템플릿을 먼저 저장한 후 체크리스트를 연결해 주세요.',
+        );
+      }
       return;
     }
 
@@ -74,10 +87,17 @@ export function TaskTemplateChecklistModal({
 
   const handleUnlink = () => {
     if (taskTemplateId.startsWith('temp-')) {
-      alert(
-        '이 태스크는 아직 저장되지 않았습니다.\n' +
-          '템플릿을 먼저 저장한 후 연결을 해제할 수 있습니다.',
-      );
+      if (onNotify) {
+        onNotify(
+          '이 태스크는 아직 저장되지 않았습니다. 템플릿을 먼저 저장한 후 연결을 해제할 수 있습니다.',
+          'error',
+        );
+      } else {
+        alert(
+          '이 태스크는 아직 저장되지 않았습니다.\n' +
+            '템플릿을 먼저 저장한 후 연결을 해제할 수 있습니다.',
+        );
+      }
       return;
     }
 
