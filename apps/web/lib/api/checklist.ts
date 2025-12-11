@@ -13,7 +13,7 @@ import { api } from '../api';
 
 // 태스크별 체크리스트 조회
 export async function getChecklist(taskId: string): Promise<ChecklistResponse> {
-  const response = await api.get(`/tasks/${taskId}/checklist`);
+  const response = await api.get(`/checklist/${taskId}`);
   return response.data;
 }
 
@@ -22,7 +22,7 @@ export async function createChecklistItem(
   taskId: string,
   data: { title: string },
 ): Promise<ChecklistItem> {
-  const response = await api.post(`/tasks/${taskId}/checklist`, data);
+  const response = await api.post(`/checklist/${taskId}/items`, data);
   return response.data;
 }
 
@@ -45,12 +45,14 @@ export async function reorderChecklist(
   taskId: string,
   orderedIds: string[],
 ): Promise<void> {
-  await api.post(`/tasks/${taskId}/checklist/reorder`, {
-    itemIds: orderedIds,
-  });
+  await api.post(`/checklist/${taskId}/reorder`, { orderedIds });
 }
 
-// 템플릿 목록 조회 (태스크에서 템플릿 적용용)
+// -----------------------------
+// 템플릿 (공통 목록 + 적용)
+// -----------------------------
+
+// 템플릿 목록 조회 (태스크에서 템플릿 적용용 & 관리 화면 공통)
 export async function getChecklistTemplates(): Promise<ChecklistTemplate[]> {
   const response = await api.get('/checklist-templates');
   return response.data;
@@ -58,12 +60,12 @@ export async function getChecklistTemplates(): Promise<ChecklistTemplate[]> {
 
 // 템플릿을 태스크에 적용
 export async function applyTemplateToTask(
-  templateId: string,
   taskId: string,
+  templateId: string,
 ): Promise<ChecklistResponse> {
-  const response = await api.post(
-    `/checklist-templates/${templateId}/apply/${taskId}`,
-  );
+  const response = await api.post(`/checklist/${taskId}/apply-template`, {
+    templateId,
+  });
   return response.data;
 }
 
@@ -75,7 +77,7 @@ export async function applyTemplateToTask(
 // 템플릿 상세 조회
 export async function getChecklistTemplate(
   templateId: string,
-): Promise<ChecklistTemplate> {
+): Promise<ChecklistTemplate & { items: ChecklistTemplateItem[] }> {
   const response = await api.get(`/checklist-templates/${templateId}`);
   return response.data;
 }
@@ -100,9 +102,13 @@ export async function updateChecklistTemplate(
 ): Promise<ChecklistTemplate> {
   const payload: { name?: string; description?: string | null } = {};
   if (data.name !== undefined) payload.name = data.name;
-  if (data.description !== undefined) payload.description = data.description ?? null;
+  if (data.description !== undefined)
+    payload.description = data.description ?? null;
 
-  const response = await api.patch(`/checklist-templates/${templateId}`, payload);
+  const response = await api.patch(
+    `/checklist-templates/${templateId}`,
+    payload,
+  );
   return response.data;
 }
 
@@ -118,9 +124,17 @@ export async function addChecklistTemplateItem(
   templateId: string,
   data: { title: string; order?: number; hasExpiry?: boolean },
 ): Promise<ChecklistTemplateItem> {
+  // ⚠️ 백엔드 DTO(AddTemplateItemDto)는 title/hasExpiry만 허용합니다.
+  // order를 같이 보내면 "property order should not exist" 400 에러가 떠서,
+  // 여기서 payload를 따로 만들어 order를 잘라냅니다.
+  const payload = {
+    title: data.title,
+    hasExpiry: data.hasExpiry ?? false,
+  };
+
   const response = await api.post(
     `/checklist-templates/${templateId}/items`,
-    data,
+    payload,
   );
   return response.data;
 }
@@ -130,26 +144,30 @@ export async function updateChecklistTemplateItem(
   itemId: string,
   data: Partial<ChecklistTemplateItem>,
 ): Promise<ChecklistTemplateItem> {
-  const response = await api.patch(`/checklist-templates/items/${itemId}`, data);
+  const response = await api.patch(
+    `/checklist-templates/items/${itemId}`,
+    data,
+  );
   return response.data;
 }
 
-// 🔥 템플릿 항목 삭제 (여기가 이번 에러 원인)
-// 백엔드 라우트: DELETE /checklist-templates/items/:itemId
+// 템플릿 항목 삭제
 export async function deleteChecklistTemplateItem(
+  templateId: string,
   itemId: string,
 ): Promise<void> {
-  await api.delete(`/checklist-templates/items/${itemId}`);
+  await api.delete(`/checklist-templates/${templateId}/items/${itemId}`);
 }
 
 // 템플릿 항목 순서 변경
 export async function reorderChecklistTemplateItems(
   templateId: string,
   orderedIds: string[],
-): Promise<ChecklistTemplate> {
-  const response = await api.patch(
-    `/checklist-templates/${templateId}/items/reorder`,
-    { itemIds: orderedIds },
-  );
-  return response.data;
+): Promise<void> {
+  // TODO: 백엔드 DTO가 { itemIds: string[] }로 바뀌어 있으면
+  // 여기서도 맞춰서 itemIds로 보내야 함.
+  // 일단 현재는 기존대로 orderedIds를 그대로 보내는 형태 유지.
+  await api.post(`/checklist-templates/${templateId}/reorder`, {
+    orderedIds,
+  });
 }
