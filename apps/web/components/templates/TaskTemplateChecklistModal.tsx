@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Check, Plus, FileText, Unlink } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'react-hot-toast';
 import { getChecklistTemplates } from '@/lib/api/checklist';
 import { templatesApi } from '@/lib/api';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -26,7 +27,9 @@ export function TaskTemplateChecklistModal({
   currentChecklistTemplateName,
 }: TaskTemplateChecklistModalProps) {
   const queryClient = useQueryClient();
-  const [selectedId, setSelectedId] = useState<string | null>(currentChecklistTemplateId);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    currentChecklistTemplateId ?? null,
+  );
 
   const { data: templates = [], isLoading } = useQuery<ChecklistTemplate[]>({
     queryKey: ['checklist-templates'],
@@ -36,34 +39,49 @@ export function TaskTemplateChecklistModal({
 
   const linkMutation = useMutation({
     mutationFn: async (checklistTemplateId: string | null) => {
-      const response = await templatesApi.linkChecklistTemplate(taskTemplateId, checklistTemplateId);
+      const response = await templatesApi.linkChecklistTemplate(
+        taskTemplateId,
+        checklistTemplateId,
+      );
       return response.data;
     },
     onSuccess: () => {
+      // 템플릿 상세 화면들 갱신
       queryClient.invalidateQueries({ queryKey: ['template'] });
       onClose();
     },
+    onError: () => {
+      toast.error('체크리스트 템플릿 연결 중 오류가 발생했습니다.');
+    },
   });
 
-const handleLink = () => {
-  if (!selectedTemplateId) {
-    toast.error('체크리스트 템플릿을 선택해 주세요.');
-    return;
-  }
+  const handleLink = () => {
+    if (!selectedId) {
+      toast.error('체크리스트 템플릿을 선택해 주세요.');
+      return;
+    }
 
-  // 1) 아직 DB에 저장 안 된 임시 태스크인 경우 (id가 temp-로 시작)
-  if (taskTemplate.id.startsWith('temp-')) {
-    toast.error('이 태스크는 아직 저장되지 않았습니다.\n템플릿을 먼저 저장한 후 체크리스트를 연결해 주세요.');
-    // 필요하면 그냥 닫지 말고 그대로 두자 (사용자가 저장 후 다시 열도록)
-    // onClose();
-    return;
-  }
+    // 아직 DB에 저장되지 않은 임시 태스크 (id가 temp-로 시작) 에서는 호출 막기
+    if (taskTemplateId.startsWith('temp-')) {
+      toast.error(
+        '이 태스크는 아직 저장되지 않았습니다.\n' +
+          '템플릿을 먼저 저장한 후 체크리스트를 연결해 주세요.',
+      );
+      return;
+    }
 
-  // 2) 정상적으로 DB에 있는 태스크인 경우에만 백엔드 호출
-  linkMutation.mutate(taskTemplate.id);
-};
+    linkMutation.mutate(selectedId);
+  };
 
   const handleUnlink = () => {
+    if (taskTemplateId.startsWith('temp-')) {
+      toast.error(
+        '이 태스크는 아직 저장되지 않았습니다.\n' +
+          '템플릿을 먼저 저장한 후 연결을 해제할 수 있습니다.',
+      );
+      return;
+    }
+
     if (confirm('체크리스트 템플릿 연결을 해제하시겠습니까?')) {
       linkMutation.mutate(null);
     }
@@ -80,7 +98,10 @@ const handleLink = () => {
             <h2 className="text-lg font-semibold">체크리스트 템플릿 연결</h2>
             <p className="text-sm text-slate-500">{taskTemplateName}</p>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-slate-100 rounded"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -110,10 +131,14 @@ const handleLink = () => {
         {/* 템플릿 목록 */}
         <div className="flex-1 overflow-y-auto p-4">
           {isLoading ? (
-            <div className="text-center text-slate-500 py-8">불러오는 중...</div>
+            <div className="text-center text-slate-500 py-8">
+              불러오는 중...
+            </div>
           ) : templates.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-slate-500 mb-4">등록된 체크리스트 템플릿이 없습니다.</p>
+              <p className="text-slate-500 mb-4">
+                등록된 체크리스트 템플릿이 없습니다.
+              </p>
               <Link
                 href="/checklist-templates"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800"
@@ -141,12 +166,19 @@ const handleLink = () => {
                         : 'border-slate-300'
                     }`}
                   >
-                    {selectedId === template.id && <Check className="h-3 w-3 text-white" />}
+                    {selectedId === template.id && (
+                      <Check className="h-3 w-3 text-white" />
+                    )}
                   </div>
                   <div className="flex-1">
-                    <div className="font-medium text-slate-900">{template.name}</div>
+                    <div className="font-medium text-slate-900">
+                      {template.name}
+                    </div>
                     <div className="text-sm text-slate-500">
-                      {template._count?.items ?? template.items?.length ?? 0}개 항목
+                      {template._count?.items ??
+                        template.items?.length ??
+                        0}
+                      개 항목
                     </div>
                   </div>
                   {template.id === currentChecklistTemplateId && (
@@ -177,7 +209,10 @@ const handleLink = () => {
             </button>
             <button
               onClick={handleLink}
-              disabled={linkMutation.isPending || selectedId === currentChecklistTemplateId}
+              disabled={
+                linkMutation.isPending ||
+                selectedId === currentChecklistTemplateId
+              }
               className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50"
             >
               {linkMutation.isPending ? '저장 중...' : '연결'}
