@@ -45,9 +45,23 @@ export function TaskTemplateChecklistModal({
     },
   });
 
-  const handleLink = () => {
-    linkMutation.mutate(selectedId);
-  };
+const handleLink = () => {
+  if (!selectedTemplateId) {
+    toast.error('체크리스트 템플릿을 선택해 주세요.');
+    return;
+  }
+
+  // 1) 아직 DB에 저장 안 된 임시 태스크인 경우 (id가 temp-로 시작)
+  if (taskTemplate.id.startsWith('temp-')) {
+    toast.error('이 태스크는 아직 저장되지 않았습니다.\n템플릿을 먼저 저장한 후 체크리스트를 연결해 주세요.');
+    // 필요하면 그냥 닫지 말고 그대로 두자 (사용자가 저장 후 다시 열도록)
+    // onClose();
+    return;
+  }
+
+  // 2) 정상적으로 DB에 있는 태스크인 경우에만 백엔드 호출
+  linkMutation.mutate(taskTemplate.id);
+};
 
   const handleUnlink = () => {
     if (confirm('체크리스트 템플릿 연결을 해제하시겠습니까?')) {
