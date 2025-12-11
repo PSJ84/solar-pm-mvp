@@ -54,10 +54,23 @@ export async function reorderChecklist(
 // 체크리스트 템플릿 관련 API
 // -----------------------------
 
-// 현재 사용 가능한 체크리스트 템플릿 목록 조회
+// 템플릿 목록 조회
 export async function getChecklistTemplates(): Promise<ChecklistTemplate[]> {
   const res = await api.get('/checklist-templates');
   return res.data;
+}
+
+// 템플릿 생성
+export async function createChecklistTemplate(
+  data: { name: string; description?: string | null },
+): Promise<ChecklistTemplate> {
+  const res = await api.post('/checklist-templates', data);
+  return res.data;
+}
+
+// 템플릿 삭제
+export async function deleteChecklistTemplate(templateId: string): Promise<void> {
+  await api.delete(`/checklist-templates/${templateId}`);
 }
 
 // 특정 템플릿 상세 조회
@@ -116,7 +129,7 @@ export async function reorderChecklistTemplateItems(
 // 템플릿 → 태스크 적용 API
 // -----------------------------
 
-// 특정 템플릿을 태스크에 적용 (기존 체크리스트를 템플릿 기준으로 생성)
+// 특정 템플릿을 태스크에 적용
 export async function applyTemplateToTask(taskId: string, templateId: string): Promise<void> {
   await api.post(`/tasks/${taskId}/checklist/apply-template`, { templateId });
 }
