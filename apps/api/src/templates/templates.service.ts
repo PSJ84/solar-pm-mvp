@@ -142,6 +142,28 @@ export class TemplatesService {
   }
 
   async linkChecklistTemplate(taskTemplateId: string, checklistTemplateId: string | null) {
+    if (taskTemplateId.startsWith('temp-')) {
+      throw new BadRequestException('임시 태스크 템플릿입니다. 저장 후 다시 시도해 주세요.');
+    }
+
+    const existingTaskTemplate = await this.prisma.taskTemplate.findUnique({
+      where: { id: taskTemplateId },
+    });
+
+    if (!existingTaskTemplate) {
+      throw new NotFoundException('태스크 템플릿을 찾을 수 없습니다.');
+    }
+
+    if (checklistTemplateId) {
+      const checklistTemplate = await this.prisma.checklistTemplate.findUnique({
+        where: { id: checklistTemplateId },
+      });
+
+      if (!checklistTemplate) {
+        throw new NotFoundException('체크리스트 템플릿을 찾을 수 없습니다.');
+      }
+    }
+
     return this.prisma.taskTemplate.update({
       where: { id: taskTemplateId },
       data: { checklistTemplateId },

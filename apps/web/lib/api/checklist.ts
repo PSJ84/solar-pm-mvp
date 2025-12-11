@@ -4,8 +4,9 @@ import {
   ChecklistTemplate,
   ChecklistTemplateItem,
   ChecklistResponse,
+  createEmptyChecklist,
 } from '@/types/checklist';
-import { api } from './index';
+import { api } from '@/lib/api';
 
 // -----------------------------
 // 1. 기존 체크리스트 (프로젝트 태스크별)
@@ -19,17 +20,7 @@ export async function getChecklist(taskId: string): Promise<ChecklistResponse> {
   } catch (error: any) {
     // ✅ 서버에서 "해당 태스크 체크리스트 없음" → 404 를 주는 경우
     if (error?.response?.status === 404) {
-      const empty: ChecklistResponse = {
-        taskId,
-        items: [],
-        summary: {
-          total: 0,
-          completed: 0,
-          pending: 0,
-          overdue: 0,
-        },
-      };
-      return empty;
+      return createEmptyChecklist();
     }
 
     // 그 외 에러는 그대로 던져서 에러 화면 띄우기
@@ -65,7 +56,7 @@ export async function reorderChecklist(
   taskId: string,
   orderedIds: string[],
 ): Promise<void> {
-  await api.post(`/checklist/${taskId}/reorder`, { orderedIds });
+  await api.post(`/checklist/${taskId}/reorder`, { itemIds: orderedIds });
 }
 
 // 태스크에서 템플릿 리스트 조회 (모달에서 사용)
@@ -132,12 +123,12 @@ export async function deleteChecklistTemplate(
 // 템플릿에 항목 추가
 export async function addChecklistTemplateItem(
   templateId: string,
-  data: { title: string; order?: number; hasExpiry?: boolean },
+  data: { title: string; hasExpiry?: boolean },
 ): Promise<ChecklistTemplateItem> {
-  const response = await api.post(
-    `/checklist-templates/${templateId}/items`,
-    data,
-  );
+  const response = await api.post(`/checklist-templates/${templateId}/items`, {
+    title: data.title,
+    hasExpiry: data.hasExpiry ?? false,
+  });
   return response.data;
 }
 
@@ -162,7 +153,7 @@ export async function reorderChecklistTemplateItems(
   templateId: string,
   orderedIds: string[],
 ): Promise<void> {
-  await api.post(`/checklist-templates/${templateId}/reorder`, {
-    orderedIds,
+  await api.patch(`/checklist-templates/${templateId}/items/reorder`, {
+    itemIds: orderedIds,
   });
 }

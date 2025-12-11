@@ -176,10 +176,17 @@ export class ChecklistTemplateService {
       orderBy: { order: 'asc' },
     });
 
+    const total = checklistItems.length;
+    const completed = checklistItems.filter((item) => item.status === 'completed').length;
+    const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+
     return {
-      applied: template.items.length,
-      total: checklistItems.length,
       items: checklistItems,
+      summary: {
+        total,
+        completed,
+        progress,
+      },
     };
   }
 }
