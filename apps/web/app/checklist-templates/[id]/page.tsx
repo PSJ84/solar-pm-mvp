@@ -75,8 +75,7 @@ const updateItemMutation = useMutation({
   });
 
 const deleteItemMutation = useMutation({
-  mutationFn: (itemId: string) =>
-    deleteChecklistTemplateItem(templateId as string, itemId),
+  mutationFn: (itemId: string) => deleteChecklistTemplateItem(itemId),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
   },
