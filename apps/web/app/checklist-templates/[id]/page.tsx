@@ -65,12 +65,12 @@ const addItemMutation = useMutation({
     },
   });
 
-  const updateItemMutation = useMutation({
-    mutationFn: ({ itemId, data }: { itemId: string; data: { title?: string; hasExpiry?: boolean } }) =>
-      updateChecklistTemplateItem(itemId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
-      setEditingItemId(null);
+const updateItemMutation = useMutation({
+  mutationFn: ({ itemId, data }: { itemId: string; data: { title?: string; hasExpiry?: boolean } }) =>
+    updateChecklistTemplateItem(templateId as string, itemId, data),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
+    setEditingItemId(null);
     },
   });
 
