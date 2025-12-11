@@ -1,12 +1,11 @@
 // apps/web/lib/api/checklist.ts
-
 import {
   ChecklistItem,
   ChecklistTemplate,
   ChecklistTemplateItem,
   ChecklistResponse,
 } from '@/types/checklist';
-import { api } from '@/lib/api';
+import { api } from './index';
 
 // -----------------------------
 // 1. 기존 체크리스트 (프로젝트 태스크별)
@@ -18,10 +17,22 @@ export async function getChecklist(taskId: string): Promise<ChecklistResponse> {
     const response = await api.get(`/checklist/${taskId}`);
     return response.data;
   } catch (error: any) {
-    // 서버가 "해당 태스크에 체크리스트 없음"을 404로 보내는 경우 기본값 리턴
+    // ✅ 서버에서 "해당 태스크 체크리스트 없음" → 404 를 주는 경우
     if (error?.response?.status === 404) {
-      return { taskId, items: [] } as unknown as ChecklistResponse;
+      const empty: ChecklistResponse = {
+        taskId,
+        items: [],
+        summary: {
+          total: 0,
+          completed: 0,
+          pending: 0,
+          overdue: 0,
+        },
+      };
+      return empty;
     }
+
+    // 그 외 에러는 그대로 던져서 에러 화면 띄우기
     throw error;
   }
 }
@@ -57,16 +68,13 @@ export async function reorderChecklist(
   await api.post(`/checklist/${taskId}/reorder`, { orderedIds });
 }
 
-// -----------------------------
-// 2. 체크리스트 템플릿 목록 (태스크에서 선택용)
-// -----------------------------
-
+// 태스크에서 템플릿 리스트 조회 (모달에서 사용)
 export async function getChecklistTemplates(): Promise<ChecklistTemplate[]> {
   const response = await api.get('/checklist-templates');
   return response.data;
 }
 
-// 태스크에 템플릿 적용
+// 템플릿을 태스크 체크리스트로 적용
 export async function applyTemplateToTask(
   taskId: string,
   templateId: string,
@@ -78,10 +86,10 @@ export async function applyTemplateToTask(
 }
 
 // -----------------------------
-// 3. 체크리스트 템플릿 관리 (/checklist-templates)
+// 2. 체크리스트 템플릿 관리 (/checklist-templates)
 // -----------------------------
 
-// 템플릿 상세 조회
+// 템플릿 목록 조회
 export async function getChecklistTemplate(
   templateId: string,
 ): Promise<ChecklistTemplate & { items: ChecklistTemplateItem[] }> {
@@ -97,7 +105,6 @@ export async function createChecklistTemplate(
     name: data.name,
     description: data.description ?? null,
   };
-
   const response = await api.post('/checklist-templates', payload);
   return response.data;
 }
@@ -116,24 +123,20 @@ export async function updateChecklistTemplate(
 }
 
 // 템플릿 삭제
-export async function deleteChecklistTemplate(templateId: string): Promise<void> {
+export async function deleteChecklistTemplate(
+  templateId: string,
+): Promise<void> {
   await api.delete(`/checklist-templates/${templateId}`);
 }
 
 // 템플릿에 항목 추가
 export async function addChecklistTemplateItem(
   templateId: string,
-  data: { title: string; hasExpiry?: boolean },
+  data: { title: string; order?: number; hasExpiry?: boolean },
 ): Promise<ChecklistTemplateItem> {
-  // ⚠️ 서버에서 order 필드 받기 싫어해서 뺌 (400: "property order should not exist" 에러 방지)
-  const payload = {
-    title: data.title,
-    hasExpiry: data.hasExpiry ?? false,
-  };
-
   const response = await api.post(
     `/checklist-templates/${templateId}/items`,
-    payload,
+    data,
   );
   return response.data;
 }
@@ -148,7 +151,9 @@ export async function updateChecklistTemplateItem(
 }
 
 // 템플릿 항목 삭제
-export async function deleteChecklistTemplateItem(itemId: string): Promise<void> {
+export async function deleteChecklistTemplateItem(
+  itemId: string,
+): Promise<void> {
   await api.delete(`/checklist-templates/items/${itemId}`);
 }
 
