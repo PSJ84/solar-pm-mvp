@@ -86,11 +86,11 @@ export async function createChecklistTemplate(
 }
 
 // 템플릿 수정
-export async function updateChecklistTemplate(
-  id: string,
-  data: Partial<Pick<ChecklistTemplate, 'name' | 'description'>>,
-): Promise<ChecklistTemplate> {
-  const response = await api.patch(`/checklist-templates/${id}`, data);
+export async function updateChecklistTemplateItem(
+  itemId: string,
+  data: Partial<ChecklistTemplateItem>,
+): Promise<ChecklistTemplateItem> {
+  const response = await api.patch(`/checklist-templates/items/${itemId}`, data);
   return response.data;
 }
 
