@@ -67,19 +67,19 @@ const addItemMutation = useMutation({
 
 const updateItemMutation = useMutation({
   mutationFn: ({ itemId, data }: { itemId: string; data: { title?: string; hasExpiry?: boolean } }) =>
-    updateChecklistTemplateItem(templateId as string, itemId, data),
+    updateChecklistTemplateItem(itemId, data),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
     setEditingItemId(null);
     },
   });
 
-  const deleteItemMutation = useMutation({
-    mutationFn: (itemId: string) => deleteChecklistTemplateItem(itemId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
-    },
-  });
+const deleteItemMutation = useMutation({
+  mutationFn: (itemId: string) => deleteChecklistTemplateItem(itemId),
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['checklist-template', templateId] });
+  },
+});
 
   const reorderMutation = useMutation({
     mutationFn: (itemIds: string[]) => reorderChecklistTemplateItems(templateId, itemIds),
