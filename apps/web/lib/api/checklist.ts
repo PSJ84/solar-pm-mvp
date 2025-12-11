@@ -5,7 +5,7 @@ import {
   ChecklistTemplateItem,
   ChecklistResponse,
 } from '@/types/checklist';
-import { api } from '..';
+import { api } from '@/lib/api';
 
 // -----------------------------
 // 1. 기존 체크리스트 (프로젝트 태스크별)
