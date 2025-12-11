@@ -56,7 +56,7 @@ export default function ChecklistTemplateDetailPage() {
   });
 
   const addItemMutation = useMutation({
-    mutationFn: (data: { title: string; hasExpiry: boolean }) =>
+    mutationFn: (data: { title: string; hasExpiry: boolean; order: number }) =>
       addChecklistTemplateItem(templateId, data),
     onSuccess: (createdItem) => {
       setItems((prev) => [...prev, createdItem].sort((a, b) => a.order - b.order));
@@ -103,6 +103,7 @@ export default function ChecklistTemplateDetailPage() {
     addItemMutation.mutate({
       title: newItemTitle.trim(),
       hasExpiry: newItemHasExpiry,
+      order: items.length,
     });
   };
 

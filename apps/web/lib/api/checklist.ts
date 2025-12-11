@@ -123,12 +123,12 @@ export async function deleteChecklistTemplate(
 // 템플릿에 항목 추가
 export async function addChecklistTemplateItem(
   templateId: string,
-  data: { title: string; hasExpiry?: boolean },
+  data: { title: string; order?: number; hasExpiry?: boolean },
 ): Promise<ChecklistTemplateItem> {
-  const response = await api.post(`/checklist-templates/${templateId}/items`, {
-    title: data.title,
-    hasExpiry: data.hasExpiry ?? false,
-  });
+  const response = await api.post(
+    `/checklist-templates/${templateId}/items`,
+    data,
+  );
   return response.data;
 }
 
@@ -153,7 +153,7 @@ export async function reorderChecklistTemplateItems(
   templateId: string,
   orderedIds: string[],
 ): Promise<void> {
-  await api.patch(`/checklist-templates/${templateId}/items/reorder`, {
+  await api.post(`/checklist-templates/${templateId}/reorder`, {
     itemIds: orderedIds,
   });
 }
