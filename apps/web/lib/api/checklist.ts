@@ -30,7 +30,7 @@ export async function createChecklistItem(
 // 체크리스트 항목 수정
 export async function updateChecklistItem(
   itemId: string,
-  data: Partial<Pick<ChecklistItem, 'title' | 'dueDate' | 'status'>>,
+  data: Partial<ChecklistItem>,
 ): Promise<ChecklistItem> {
   const response = await api.patch(`/checklist/${itemId}`, data);
   return response.data;
