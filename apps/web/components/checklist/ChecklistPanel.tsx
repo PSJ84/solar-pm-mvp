@@ -10,7 +10,7 @@ import {
 import { ChecklistProgress } from './ChecklistProgress';
 import { ChecklistItemRow } from './ChecklistItemRow';
 import { ChecklistTemplateModal } from './ChecklistTemplateModal';
-import type { ChecklistStatus } from '@/types/checklist';
+import { createEmptyChecklist, type ChecklistStatus } from '@/types/checklist';
 
 interface Props {
   taskId: string;
@@ -56,7 +56,9 @@ export function ChecklistPanel({ taskId, defaultExpanded = false }: Props) {
     return <div className="p-4 text-red-500">체크리스트를 불러올 수 없습니다.</div>;
   }
 
-  const { items, summary } = data || { items: [], summary: { total: 0, completed: 0, progress: 0 } };
+  const checklist = data ?? createEmptyChecklist();
+  const items = checklist.items ?? [];
+  const summary = checklist.summary ?? createEmptyChecklist().summary;
 
   return (
     <div className="border rounded-lg bg-white">

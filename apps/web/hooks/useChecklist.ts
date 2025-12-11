@@ -8,13 +8,14 @@ import {
   getChecklistTemplates,
   applyTemplateToTask,
 } from '@/lib/api/checklist';
-import type { ChecklistStatus } from '@/types/checklist';
+import { createEmptyChecklist, type ChecklistStatus } from '@/types/checklist';
 
 export function useChecklist(taskId: string) {
   return useQuery({
     queryKey: ['checklist', taskId],
     queryFn: () => getChecklist(taskId),
     enabled: Boolean(taskId),
+    placeholderData: createEmptyChecklist(),
   });
 }
 
@@ -29,9 +30,10 @@ export function useApplyTemplate(taskId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (templateId: string) => applyTemplateToTask(templateId, taskId),
+    mutationFn: (templateId: string) => applyTemplateToTask(taskId, templateId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['checklist', taskId] });
+      queryClient.invalidateQueries({ queryKey: ['checklist-templates'] });
     },
   });
 }

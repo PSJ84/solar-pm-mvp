@@ -35,6 +35,20 @@ export interface ChecklistResponse {
   summary: ChecklistSummary;
 }
 
+/**
+ * 체크리스트가 없을 때 사용할 기본 응답 형태
+ */
+export function createEmptyChecklist(): ChecklistResponse {
+  return {
+    items: [],
+    summary: {
+      total: 0,
+      completed: 0,
+      progress: 0,
+    },
+  };
+}
+
 export interface ChecklistTemplateItem {
   id: string;
   title: string;

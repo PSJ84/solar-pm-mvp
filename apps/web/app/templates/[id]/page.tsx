@@ -539,6 +539,7 @@ export default function TemplateDetailPage() {
         taskTemplateName={checklistModalState.taskTemplateName}
         currentChecklistTemplateId={checklistModalState.checklistTemplateId}
         currentChecklistTemplateName={checklistModalState.checklistTemplateName}
+        onNotify={showToast}
       />
     </AppShell>
   );
