@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Check, Plus, FileText, Unlink } from 'lucide-react';
 import Link from 'next/link';
-import { toast } from 'react-hot-toast';
 import { getChecklistTemplates } from '@/lib/api/checklist';
 import { templatesApi } from '@/lib/api';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -51,19 +50,19 @@ export function TaskTemplateChecklistModal({
       onClose();
     },
     onError: () => {
-      toast.error('체크리스트 템플릿 연결 중 오류가 발생했습니다.');
+      alert('체크리스트 템플릿 연결 중 오류가 발생했습니다.');
     },
   });
 
   const handleLink = () => {
     if (!selectedId) {
-      toast.error('체크리스트 템플릿을 선택해 주세요.');
+      alert('체크리스트 템플릿을 선택해 주세요.');
       return;
     }
 
-    // 아직 DB에 저장되지 않은 임시 태스크 (id가 temp-로 시작) 에서는 호출 막기
+    // 아직 DB에 저장되지 않은 임시 태스크 (id가 temp-로 시작) 는 막기
     if (taskTemplateId.startsWith('temp-')) {
-      toast.error(
+      alert(
         '이 태스크는 아직 저장되지 않았습니다.\n' +
           '템플릿을 먼저 저장한 후 체크리스트를 연결해 주세요.',
       );
@@ -75,7 +74,7 @@ export function TaskTemplateChecklistModal({
 
   const handleUnlink = () => {
     if (taskTemplateId.startsWith('temp-')) {
-      toast.error(
+      alert(
         '이 태스크는 아직 저장되지 않았습니다.\n' +
           '템플릿을 먼저 저장한 후 연결을 해제할 수 있습니다.',
       );
