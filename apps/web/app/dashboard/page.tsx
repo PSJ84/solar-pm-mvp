@@ -1,6 +1,7 @@
 // apps/web/app/dashboard/page.tsx
 'use client';
 
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { TodayWidget } from '@/components/dashboard/TodayWidget';
 import { RiskProjectsBanner } from '@/components/dashboard/RiskProjectsBanner';
@@ -46,9 +47,17 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* 페이지 헤더 */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">대시보드</h1>
-        <p className="text-slate-600 mt-1">오늘의 태양광 프로젝트 현황을 확인하세요.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">대시보드</h1>
+          <p className="text-slate-600 mt-1">오늘의 태양광 프로젝트 현황을 확인하세요.</p>
+        </div>
+        <Link
+          href="/tomorrow"
+          className="inline-flex items-center justify-center rounded-lg bg-solar-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-solar-600"
+        >
+          내일 뭐하지?
+        </Link>
       </div>
 
       {/* 요약 카드 */}
