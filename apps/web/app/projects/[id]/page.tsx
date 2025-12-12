@@ -82,6 +82,14 @@ const normalizeDateInput = (value?: string | null) => {
   return date.toISOString().slice(0, 10);
 };
 
+const normalizeDateTimeInput = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const localDateTime = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
+  return localDateTime.toISOString().slice(0, 16);
+};
+
 const isLongMemo = (value?: string | null) => {
   if (!value) return false;
   const trimmed = value.trim();
@@ -359,7 +367,12 @@ export default function ProjectDetailPage() {
     }: {
       taskId: string;
       stageId: string;
-      data: Partial<Pick<Task, 'title' | 'isActive' | 'startDate' | 'completedDate' | 'dueDate' | 'memo'>>;
+      data: Partial<
+        Pick<
+          Task,
+          'title' | 'isActive' | 'startDate' | 'completedDate' | 'dueDate' | 'memo' | 'notificationEnabled' | 'reminderIntervalMin'
+        >
+      >;
     }) => {
       const response = await tasksApi.update(taskId, data);
       return response.data;
@@ -1175,11 +1188,26 @@ export default function ProjectDetailPage() {
                             <label className="flex items-center gap-2">
                               <span>기한</span>
                               <input
-                                type="date"
-                                value={normalizeDateInput(task.dueDate)}
+                                type="datetime-local"
+                                value={normalizeDateTimeInput(task.dueDate)}
                                 onChange={(e) => handleTaskDateChange(task, 'dueDate', e.target.value)}
                                 className="rounded border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               />
+                            </label>
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={task.notificationEnabled ?? false}
+                                onChange={(e) =>
+                                  updateTaskFields({
+                                    taskId: task.id,
+                                    stageId: activeStage.id,
+                                    data: { notificationEnabled: e.target.checked },
+                                  })
+                                }
+                                className="h-4 w-4 rounded border-slate-300 text-blue-500"
+                              />
+                              <span className="text-xs text-slate-500">🔔 알림</span>
                             </label>
                             <label className="flex items-center gap-2">
                               <span>시작일</span>
