@@ -9,14 +9,35 @@ import {
   RiskProjectItem,
 } from './dto/dashboard-summary.dto';
 import { MyWorkTab, MyWorkTaskDto } from './dto/my-work.dto';
+import { TaskSummaryDto, TomorrowDashboardDto } from './dto/tomorrow-dashboard.dto';
 import { TaskStatus } from '../tasks/dto/task.dto';
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
+const KST_OFFSET_MINUTES = 9 * 60;
 
 const startOfDay = (d: Date) => {
   const copy = new Date(d);
   copy.setHours(0, 0, 0, 0);
   return copy;
+};
+
+const getKstStartOfDayUtc = (base: Date, offsetDays = 0) => {
+  const utcMs = base.getTime() + base.getTimezoneOffset() * 60 * 1000;
+  const kstMs = utcMs + KST_OFFSET_MINUTES * 60 * 1000;
+
+  const kstDate = new Date(kstMs);
+  kstDate.setHours(0, 0, 0, 0);
+  kstDate.setDate(kstDate.getDate() + offsetDays);
+
+  const utcStart = kstDate.getTime() - KST_OFFSET_MINUTES * 60 * 1000;
+  return new Date(utcStart);
+};
+
+const formatKstDateString = (date: Date) => {
+  const utcMs = date.getTime() + date.getTimezoneOffset() * 60 * 1000;
+  const kstMs = utcMs + KST_OFFSET_MINUTES * 60 * 1000;
+  const kstDate = new Date(kstMs);
+  return kstDate.toISOString().slice(0, 10);
 };
 
 const calcDDay = (dueDate: Date | null): number | null => {
@@ -564,6 +585,155 @@ export class DashboardService {
       todayDueCount,
       riskProjectCount: riskProjects.filter((p) => p.riskScore >= 80).length,
     };
+  }
+
+  /**
+   * 내일 플래너 (Big3 + 마감 태스크)
+   */
+  async getTomorrowDashboard(userId?: string, companyId?: string): Promise<TomorrowDashboardDto> {
+    const resolvedCompanyId = await this.resolveCompanyId(companyId);
+
+    const todayStart = getKstStartOfDayUtc(new Date());
+    const tomorrowStart = getKstStartOfDayUtc(new Date(), 1);
+    const dayAfterStart = getKstStartOfDayUtc(new Date(), 2);
+    const dateString = formatKstDateString(tomorrowStart);
+
+    const baseWhere: Prisma.TaskWhereInput = {
+      assigneeId: userId || undefined,
+      deletedAt: null,
+      isActive: true,
+      status: { not: TaskStatus.COMPLETED },
+      projectStage: {
+        deletedAt: null,
+        isActive: true,
+        project: { companyId: resolvedCompanyId, deletedAt: null },
+      },
+    };
+
+    const taskSelect = {
+      id: true,
+      title: true,
+      status: true,
+      dueDate: true,
+      projectStage: {
+        select: {
+          id: true,
+          template: { select: { name: true } },
+          project: { select: { id: true, name: true } },
+        },
+      },
+    } satisfies Prisma.TaskSelect;
+
+    try {
+      const [overdueRaw, dueTodayRaw, dueTomorrowRaw] = await Promise.all([
+        this.prisma.task.findMany({
+          where: {
+            ...baseWhere,
+            dueDate: { lt: todayStart },
+          },
+          select: taskSelect,
+          orderBy: [
+            { dueDate: 'asc' },
+            { createdAt: 'asc' },
+          ],
+        }),
+        this.prisma.task.findMany({
+          where: {
+            ...baseWhere,
+            dueDate: {
+              gte: todayStart,
+              lt: tomorrowStart,
+            },
+          },
+          select: taskSelect,
+          orderBy: [
+            { dueDate: 'asc' },
+            { createdAt: 'asc' },
+          ],
+        }),
+        this.prisma.task.findMany({
+          where: {
+            ...baseWhere,
+            dueDate: {
+              gte: tomorrowStart,
+              lt: dayAfterStart,
+            },
+          },
+          select: taskSelect,
+          orderBy: [
+            { dueDate: 'asc' },
+            { createdAt: 'asc' },
+          ],
+        }),
+      ]);
+
+      const overdue = overdueRaw.map((task) => this.mapTaskToSummary(task));
+      const dueToday = dueTodayRaw.map((task) => this.mapTaskToSummary(task));
+      const dueTomorrow = dueTomorrowRaw.map((task) => this.mapTaskToSummary(task));
+
+      const big3 = this.pickBig3([...overdue, ...dueToday, ...dueTomorrow]);
+
+      return {
+        date: dateString,
+        big3,
+        dueTomorrow,
+        overdue,
+        dueToday,
+      };
+    } catch (error) {
+      console.error('Failed to load tomorrow dashboard', error);
+      return {
+        date: dateString,
+        big3: [],
+        dueTomorrow: [],
+        overdue: [],
+        dueToday: [],
+      };
+    }
+  }
+
+  private mapTaskToSummary(task: {
+    id: string;
+    title: string;
+    status: string;
+    dueDate: Date | null;
+    projectStage?: {
+      id: string;
+      template?: { name: string | null } | null;
+      project?: { id: string; name: string } | null;
+    } | null;
+  }): TaskSummaryDto {
+    return {
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      dueDate: task.dueDate ? task.dueDate.toISOString() : null,
+      project: task.projectStage?.project
+        ? {
+            id: task.projectStage.project.id,
+            name: task.projectStage.project.name,
+          }
+        : null,
+      stage: task.projectStage
+        ? {
+            id: task.projectStage.id,
+            name: task.projectStage.template?.name ?? task.projectStage.id,
+          }
+        : null,
+    };
+  }
+
+  private pickBig3(tasks: TaskSummaryDto[]): TaskSummaryDto[] {
+    const uniq = new Map<string, TaskSummaryDto>();
+
+    for (const task of tasks) {
+      if (!uniq.has(task.id)) {
+        uniq.set(task.id, task);
+      }
+      if (uniq.size >= 3) break;
+    }
+
+    return Array.from(uniq.values());
   }
 
   // ===========================================

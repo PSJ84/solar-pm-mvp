@@ -4,6 +4,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiResponse } from '@ne
 import { Request } from 'express';
 import { DashboardService } from './dashboard.service';
 import { DashboardSummaryDto } from './dto/dashboard-summary.dto';
+import { TomorrowDashboardDto } from './dto/tomorrow-dashboard.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { MyWorkTab } from './dto/my-work.dto';
 
@@ -61,6 +62,17 @@ export class DashboardController {
     const companyId = user?.companyId;
 
     return this.dashboardService.getSummary(userId, companyId);
+  }
+
+  @Get('tomorrow')
+  @ApiOperation({ summary: '내일 플래너 (Big3/마감 태스크)' })
+  @ApiResponse({ status: 200, type: TomorrowDashboardDto })
+  async getTomorrowDashboard(@Req() req: Request): Promise<TomorrowDashboardDto> {
+    const user: any = (req as any).user;
+    const userId = user?.sub || user?.id;
+    const companyId = user?.companyId;
+
+    return this.dashboardService.getTomorrowDashboard(userId, companyId);
   }
 
   @Get('today')
