@@ -250,6 +250,10 @@ model Task {
   lastStatusChangedAt  DateTime     @default(now())
   isActive             Boolean      @default(true)
 
+  // 알림 설정
+  notificationEnabled  Boolean   @default(false)
+  reminderIntervalMin  Int?      // 반복 알림 간격 (분), null이면 반복 안함
+
   // MVP #20: 착공 강제 조건
   isMandatory     Boolean       @default(false)
 
