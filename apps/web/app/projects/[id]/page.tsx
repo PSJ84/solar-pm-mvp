@@ -1205,7 +1205,7 @@ export default function ProjectDetailPage() {
                                     data: { notificationEnabled: e.target.checked },
                                   })
                                 }
-                                className="rounded border-slate-300"
+                                className="h-4 w-4 rounded border-slate-300 text-blue-500"
                               />
                               <span className="text-xs text-slate-500">🔔 알림</span>
                             </label>

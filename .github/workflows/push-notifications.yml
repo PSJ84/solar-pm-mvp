@@ -1,0 +1,19 @@
+name: Send Push Notifications
+
+on:
+  schedule:
+    # 매일 오전 8시 KST (전날 23:00 UTC)
+    - cron: '0 23 * * *'
+    # D-day 반복용 시간별 트리거
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  send-notifications:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Push Notifications
+        run: |
+          curl -X POST "${{ secrets.API_URL }}/notifications/push/trigger" \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"

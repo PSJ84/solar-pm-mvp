@@ -49,7 +49,8 @@ export interface Task {
   memo?: string;
   dueDate?: string | null;
   notificationEnabled?: boolean;
-  reminderIntervalMin?: number | null;
+  reminderIntervalMin?: number;
+  lastNotifiedAt?: string | null;
   status: TaskStatus;
   isActive?: boolean;
   isMandatory: boolean;
