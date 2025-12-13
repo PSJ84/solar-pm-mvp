@@ -18,7 +18,7 @@
     "db:studio": "pnpm --filter @solar-pm/prisma studio",
     "lint": "pnpm --parallel -r run lint",
     "clean": "pnpm --parallel -r run clean && rm -rf node_modules",
-    "start:api": "pnpm prisma:generate && pnpm prisma:migrate:deploy && pnpm --filter @solar-pm/api start:prod"
+    "start:api": "node apps/api/scripts/railway-start.mjs"
   },
   "engines": {
     "node": ">=18.0.0",
