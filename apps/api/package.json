@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+  "prestart": "pnpm --filter @solar-pm/prisma migrate:deploy",
+  "prestart:prod": "pnpm --filter @solar-pm/prisma migrate:deploy",
   "prebuild": "prisma generate --schema=../../packages/prisma/schema.prisma",
   "dev": "ts-node -r tsconfig-paths/register src/main.ts",
   "build": "nest build",
