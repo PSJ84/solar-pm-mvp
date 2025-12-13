@@ -1,24 +1,102 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { PrismaService } from '../prisma/prisma.service';
 
-@Injectable()
-export class PushService {
-  private readonly logger = new Logger(PushService.name);
+type ServiceAccount = admin.ServiceAccount & { privateKey: string };
 
-  constructor(private readonly prisma: PrismaService) {
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        }),
-      });
+@Injectable()
+export class PushService implements OnModuleInit {
+  private readonly logger = new Logger(PushService.name);
+  private enabled = false;
+  private disabledReason?: string;
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  onModuleInit() {
+    if (!this.isPushEnabled()) {
+      this.enabled = false;
+      this.disabledReason = 'Push notifications disabled by configuration';
+      this.logger.warn(this.disabledReason);
+      return;
+    }
+
+    const serviceAccount = this.loadServiceAccount();
+
+    if (!serviceAccount) {
+      this.enabled = false;
+      const reason = this.disabledReason || 'Invalid service account configuration';
+      this.logger.warn(`Push notifications disabled: ${reason}`);
+      return;
+    }
+
+    try {
+      if (!admin.apps.length) {
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+        });
+      }
+
+      this.enabled = true;
+      this.logger.log('Push notifications enabled');
+    } catch (error: any) {
+      this.enabled = false;
+      this.disabledReason = `Failed to initialize Firebase Admin: ${error.message}`;
+      this.logger.error(this.disabledReason);
     }
   }
 
+  private isPushEnabled() {
+    return String(process.env.PUSH_ENABLED).toLowerCase() === 'true';
+  }
+
+  private loadServiceAccount(): ServiceAccount | null {
+    const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+
+    if (json) {
+      try {
+        const parsed = JSON.parse(json);
+        const { project_id, client_email, private_key } = parsed;
+
+        if (!project_id || !client_email || !private_key) {
+          this.disabledReason = 'Missing required keys in FIREBASE_SERVICE_ACCOUNT_JSON';
+          return null;
+        }
+
+        return {
+          projectId: project_id,
+          clientEmail: client_email,
+          privateKey: String(private_key).replace(/\\n/g, '\n'),
+        } as ServiceAccount;
+      } catch (error: any) {
+        this.disabledReason = `Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON: ${error.message}`;
+        return null;
+      }
+    }
+
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+    if (!projectId || !clientEmail || !privateKey) {
+      this.disabledReason = 'Firebase service account environment variables are incomplete';
+      return null;
+    }
+
+    return {
+      projectId,
+      clientEmail,
+      privateKey,
+    } as ServiceAccount;
+  }
+
   async sendDueNotifications() {
+    if (!this.enabled) {
+      return {
+        skipped: true,
+        reason: this.disabledReason || 'Push notifications disabled',
+      };
+    }
+
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
