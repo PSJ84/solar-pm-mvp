@@ -101,6 +101,14 @@ pnpm dev:api   # NestJS (http://localhost:3001)
 - **Swagger 문서**: http://localhost:3001/api/docs
 - **Prisma Studio**: `pnpm db:studio` (http://localhost:5555)
 
+### 배포 시 Vercel ↔ Railway 연동 점검
+
+- Railway Public URL이 변경되면 **Vercel 프로젝트의 `NEXT_PUBLIC_API_URL` 환경변수**도 동일한 값(예: `https://<railway-subdomain>.railway.app`)으로 맞춘다.
+- 프론트 빌드 전 Vercel Environment Variables에서 API URL이 최신인지 확인한다.
+- /api/health가 200 OK를 반환하는지 Railway Logs에서 확인해 API 컨테이너가 실제로 기동했는지 점검한다.
+- Supabase는 migrate 시 풀러(6543) 대신 직결(5432)을 권장하므로, Railway/환경변수에 `DIRECT_URL`을 설정하고 `pnpm --filter @solar-pm/prisma migrate:deploy:log`로 적용/누락 여부를 로그로 확인한다.
+- `DIRECT_URL`을 넣지 못한 경우를 대비해 모든 Prisma 스크립트가 `DIRECT_URL=${DIRECT_URL:-$DATABASE_URL}`으로 기본값을 지정한다(풀러로도 동작). 가능하면 Railway Variables에 `DIRECT_URL`을 추가해 직결로 마이그레이션한다.
+
 ## 📋 주요 API 엔드포인트
 
 ```
@@ -159,7 +167,8 @@ GET    /api/share-links/view/:token  외부 조회
 
 | 변수 | 설명 | 예시 |
 |------|------|------|
-| `DATABASE_URL` | PostgreSQL 연결 문자열 | `postgresql://user:pass@localhost:5432/solar_pm` |
+| `DATABASE_URL` | PostgreSQL 연결 문자열 (런타임/풀러) | `postgresql://user:pass@localhost:5432/solar_pm` |
+| `DIRECT_URL` | Prisma migrate 전용 직결 문자열(풀러 우회) | `postgresql://user:pass@localhost:5432/solar_pm?pgbouncer=false` |
 | `JWT_SECRET` | JWT 서명 키 | 32자 이상 랜덤 문자열 |
 | `MAGIC_LINK_SECRET` | Magic Link 암호화 키 | 32자 이상 랜덤 문자열 |
 | `NEXT_PUBLIC_API_URL` | API 서버 URL | `http://localhost:3001` |
