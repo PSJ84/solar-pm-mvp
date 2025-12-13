@@ -6,6 +6,8 @@ import { AppModule } from './app.module';
 import { LoggingExceptionFilter } from './logging-exception.filter';
 
 async function bootstrap() {
+  console.log(`[boot] API entry file: ${__filename}`);
+  console.log(`[boot] PORT env: ${process.env.PORT ?? 'not set (default 3000)'}`);
   const app = await NestFactory.create(AppModule);
 
   // Global prefix

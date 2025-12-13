@@ -8,6 +8,7 @@
   "generate": "prisma generate",
   "migrate:dev": "prisma migrate dev",
   "migrate:deploy": "prisma migrate deploy",
+  "migrate:deploy:log": "echo '[prisma] migrate deploy (uses DIRECT_URL if set)' && prisma migrate deploy && prisma migrate status",
   "db:push": "prisma db push",
   "studio": "prisma studio",
   "seed": "ts-node --project tsconfig.seed.json --transpile-only seed.ts"
