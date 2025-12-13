@@ -7,6 +7,31 @@ import { CreateProjectDto, UpdateProjectDto } from './dto/project.dto';
 export class ProjectsService {
   constructor(private prisma: PrismaService) {}
 
+  private buildTaskSelect(includeNotification: boolean) {
+    return {
+      id: true,
+      title: true,
+      description: true,
+      status: true,
+      isMandatory: true,
+      isActive: true,
+      dueDate: true,
+      waitingFor: true,
+      assigneeId: true,
+      templateId: true,
+      projectStageId: true,
+      createdAt: true,
+      updatedAt: true,
+      ...(includeNotification ? { notificationEnabled: true } : {}),
+      assignee: {
+        select: { id: true, name: true, email: true },
+      },
+      _count: {
+        select: { photos: true, documents: true },
+      },
+    } as const;
+  }
+
   // NOTE: 인증이 없을 때에도 동작하도록 companyId를 안전하게 해석
   private async resolveCompanyId(optionalCompanyId?: string): Promise<string> {
     if (optionalCompanyId) return optionalCompanyId;
@@ -99,6 +124,7 @@ export class ProjectsService {
    */
   async findAll(companyId?: string) {
     const where = companyId ? { companyId, deletedAt: null } : { deletedAt: null };
+    const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
 
     const projects = await this.prisma.project.findMany({
       where,
@@ -107,7 +133,10 @@ export class ProjectsService {
           where: { deletedAt: null, isActive: true },
           include: {
             template: true,
-            tasks: { where: { deletedAt: null, isActive: true } },
+            tasks: {
+              where: { deletedAt: null, isActive: true },
+              select: this.buildTaskSelect(includeNotificationColumn),
+            },
           },
         },
         _count: {
@@ -158,6 +187,8 @@ export class ProjectsService {
       where.companyId = companyId;
     }
 
+    const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
+
     const project = await this.prisma.project.findFirst({
       where,
       include: {
@@ -169,14 +200,7 @@ export class ProjectsService {
               where: includeInactive
                 ? { deletedAt: null }
                 : { deletedAt: null, isActive: true },
-              include: {
-                assignee: {
-                  select: { id: true, name: true, email: true },
-                },
-                _count: {
-                  select: { photos: true, documents: true },
-                },
-              },
+              select: this.buildTaskSelect(includeNotificationColumn),
               orderBy: { createdAt: 'asc' },
             },
           },
