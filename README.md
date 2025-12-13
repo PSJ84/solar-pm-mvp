@@ -70,7 +70,7 @@ cp .env.example .env
 # .env 파일을 열고 DATABASE_URL 등을 설정
 ```
 
-- **Railway 배포 시 주의**: Prisma migrate는 `DATABASE_URL`과 `DIRECT_URL`이 모두 설정되어 있어야 하며, `DIRECT_URL`이 없으면 P1012 오류로 실패할 수 있습니다. 두 값을 모두 Railway Variables에 넣어주세요.
+- **Railway 배포 시 주의**: Prisma migrate는 `DATABASE_URL`과 `DIRECT_URL`이 모두 설정되어 있어야 하며, `DIRECT_URL`이 없으면 P1012 오류로 실패할 수 있습니다. 두 값을 모두 Railway Variables에 넣어주세요. `DIRECT_URL`이 비어 있고 Supabase 풀러 URL(`.pooler.supabase.com:6543`)만 있는 경우, start 스크립트가 직결 주소(`.supabase.co:5432`)로 자동 대체합니다.
 
 ### 4. 데이터베이스 설정
 
@@ -109,7 +109,7 @@ pnpm dev:api   # NestJS (http://localhost:3001)
 - 프론트 빌드 전 Vercel Environment Variables에서 API URL이 최신인지 확인한다.
 - /api/health가 200 OK를 반환하는지 Railway Logs에서 확인해 API 컨테이너가 실제로 기동했는지 점검한다.
 - Supabase는 migrate 시 풀러(6543) 대신 직결(5432)을 권장하므로, Railway/환경변수에 `DIRECT_URL`을 설정하고 `pnpm --filter @solar-pm/prisma migrate:deploy:log`로 적용/누락 여부를 로그로 확인한다.
-- `DIRECT_URL`을 넣지 못한 경우를 대비해 모든 Prisma 스크립트가 `DIRECT_URL=${DIRECT_URL:-$DATABASE_URL}`으로 기본값을 지정한다(풀러로도 동작). 가능하면 Railway Variables에 `DIRECT_URL`을 추가해 직결로 마이그레이션한다.
+- `DIRECT_URL`을 넣지 못한 경우를 대비해 모든 Prisma 스크립트가 `DIRECT_URL=${DIRECT_URL:-$DATABASE_URL}`으로 기본값을 지정한다(풀러로도 동작). 가능하면 Railway Variables에 `DIRECT_URL`을 추가해 직결로 마이그레이션한다. Railway Start 커맨드는 `pnpm start:api`로 설정해 `apps/api/scripts/railway-start.mjs`가 migrate deploy까지 수행하도록 맞춘다.
 
 ## 📋 주요 API 엔드포인트
 
