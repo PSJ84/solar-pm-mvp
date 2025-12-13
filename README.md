@@ -70,6 +70,8 @@ cp .env.example .env
 # .env 파일을 열고 DATABASE_URL 등을 설정
 ```
 
+- **Railway 배포 시 주의**: Prisma migrate는 `DATABASE_URL`과 `DIRECT_URL`이 모두 설정되어 있어야 하며, `DIRECT_URL`이 없으면 P1012 오류로 실패할 수 있습니다. 두 값을 모두 Railway Variables에 넣어주세요.
+
 ### 4. 데이터베이스 설정
 
 ```bash
