@@ -53,6 +53,27 @@ const calcDDay = (dueDate: Date | null): number | null => {
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
+  private buildTaskSelect(includeNotification: boolean) {
+    const select = {
+      id: true,
+      title: true,
+      dueDate: true,
+      status: true,
+      isMandatory: true,
+      waitingFor: true,
+      ...(includeNotification ? { notificationEnabled: true } : {}),
+      projectStage: {
+        select: {
+          id: true,
+          project: { select: { id: true, name: true } },
+          template: { select: { name: true } },
+        },
+      },
+    } as const satisfies Prisma.TaskSelect;
+
+    return select;
+  }
+
   // NOTE: 인증이 없을 때에도 동작하도록 companyId를 안전하게 해석
   private async resolveCompanyId(optionalCompanyId?: string): Promise<string> {
     if (optionalCompanyId) return optionalCompanyId;
@@ -131,18 +152,14 @@ export class DashboardService {
         tabWhere = {};
     }
 
+    const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
+    const taskSelect = this.buildTaskSelect(includeNotificationColumn);
+
     const tasks = await this.prisma.task.findMany({
       where: {
         AND: [baseWhere, tabWhere],
       },
-      include: {
-        projectStage: {
-          include: {
-            project: true,
-            template: true,
-          },
-        },
-      },
+      select: taskSelect,
       orderBy: [
         { dueDate: 'asc' },
         { createdAt: 'asc' },
@@ -226,6 +243,9 @@ export class DashboardService {
     userId: string | undefined,
     companyId: string,
   ): Promise<TaskSummaryItem[]> {
+    const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
+    const taskSelect = this.buildTaskSelect(includeNotificationColumn);
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -252,18 +272,7 @@ export class DashboardService {
           },
         },
       },
-      include: {
-        projectStage: {
-          include: {
-            project: {
-              select: { id: true, name: true },
-            },
-            template: {
-              select: { name: true },
-            },
-          },
-        },
-      },
+      select: taskSelect,
       orderBy: { dueDate: 'asc' },
     });
 
@@ -286,6 +295,9 @@ export class DashboardService {
     userId: string | undefined,
     companyId: string,
   ): Promise<TaskSummaryItem[]> {
+    const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
+    const taskSelect = this.buildTaskSelect(includeNotificationColumn);
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -314,18 +326,7 @@ export class DashboardService {
           },
         },
       },
-      include: {
-        projectStage: {
-          include: {
-            project: {
-              select: { id: true, name: true },
-            },
-            template: {
-              select: { name: true },
-            },
-          },
-        },
-      },
+      select: taskSelect,
       orderBy: { dueDate: 'asc' },
     });
 
@@ -394,6 +395,8 @@ export class DashboardService {
   private async getRiskProjectsForSummary(
     companyId: string,
   ): Promise<RiskProjectItem[]> {
+    const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
+
     const projects = await this.prisma.project.findMany({
       where: {
         companyId,
@@ -406,6 +409,13 @@ export class DashboardService {
           include: {
             tasks: {
               where: { deletedAt: null, isActive: true },
+              select: {
+                id: true,
+                status: true,
+                dueDate: true,
+                isActive: true,
+                ...(includeNotificationColumn ? { notificationEnabled: true } : {}),
+              },
             },
             template: true,
           },
@@ -745,6 +755,8 @@ export class DashboardService {
    */
   async getTodayTasks(userId?: string, companyId?: string) {
     const resolvedCompanyId = await this.resolveCompanyId(companyId);
+    const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
+    const taskSelect = this.buildTaskSelect(includeNotificationColumn);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -771,18 +783,7 @@ export class DashboardService {
           },
         },
       },
-      include: {
-        projectStage: {
-          include: {
-            project: {
-              select: { id: true, name: true },
-            },
-            template: {
-              select: { name: true },
-            },
-          },
-        },
-      },
+      select: taskSelect,
       orderBy: { dueDate: 'asc' },
     });
 
@@ -808,6 +809,8 @@ export class DashboardService {
    */
   async getUpcomingTasks(userId?: string, companyId?: string, days = 7) {
     const resolvedCompanyId = await this.resolveCompanyId(companyId);
+    const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
+    const taskSelect = this.buildTaskSelect(includeNotificationColumn);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const endDate = new Date(today);
@@ -834,15 +837,7 @@ export class DashboardService {
           },
         },
       },
-      include: {
-        projectStage: {
-          include: {
-            project: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-      },
+      select: taskSelect,
       orderBy: { dueDate: 'asc' },
     });
 
