@@ -24,13 +24,35 @@ export class TasksService {
   }
 
   private async resolveUserId(optionalUserId?: string): Promise<string> {
-    if (optionalUserId) return optionalUserId;
+    if (optionalUserId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: optionalUserId },
+        select: { id: true, email: true, name: true },
+      });
+
+      if (user) {
+        return user.id;
+      }
+
+      console.warn('[TasksService] Failed to resolve user by id', {
+        userId: optionalUserId,
+        reason: 'User record not found',
+      });
+    }
 
     const companyId = await this.resolveCompanyId();
 
-    let user = await this.prisma.user.findFirst({ where: { companyId }, select: { id: true } });
+    let user = await this.prisma.user.findFirst({
+      where: { companyId },
+      select: { id: true, email: true, name: true },
+    });
 
     if (!user) {
+      console.warn('[TasksService] No user found for company, creating fallback user', {
+        companyId,
+        lookup: 'companyId',
+      });
+
       user = await this.prisma.user.create({
         data: {
           email: 'dev-user@example.com',

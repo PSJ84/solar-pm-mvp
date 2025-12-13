@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { LoggingExceptionFilter } from './logging-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -25,6 +26,8 @@ async function bootstrap() {
     }),
   );
 
+  app.useGlobalFilters(new LoggingExceptionFilter());
+
   // Swagger 문서
   const config = new DocumentBuilder()
     .setTitle('Solar PM API')
@@ -35,10 +38,10 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.API_PORT || 3001;
-  await app.listen(port);
-  console.log(`🚀 API Server running on http://localhost:${port}`);
-  console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
+  const port = Number(process.env.PORT) || 3000;
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 API Server running on http://0.0.0.0:${port}`);
+  console.log(`📚 Swagger docs: http://0.0.0.0:${port}/api/docs`);
 }
 
 bootstrap();
