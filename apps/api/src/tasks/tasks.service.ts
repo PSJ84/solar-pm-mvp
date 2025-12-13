@@ -28,7 +28,7 @@ export class TasksService {
 
     const companyId = await this.resolveCompanyId();
 
-    let user = await this.prisma.user.findFirst({ where: { companyId } });
+    let user = await this.prisma.user.findFirst({ where: { companyId }, select: { id: true } });
 
     if (!user) {
       user = await this.prisma.user.create({
@@ -124,6 +124,9 @@ export class TasksService {
         title: true,
         status: true,
         dueDate: true,
+        notificationEnabled: true,
+        createdAt: true,
+        updatedAt: true,
         projectStage: {
           select: {
             id: true,
@@ -147,6 +150,9 @@ export class TasksService {
         title: task.title,
         status: task.status,
         dueDate: task.dueDate,
+        notificationEnabled: task.notificationEnabled,
+        createdAt: task.createdAt,
+        updatedAt: task.updatedAt,
         dDay,
         project: task.projectStage?.project
           ? { id: task.projectStage.project.id, name: task.projectStage.project.name }

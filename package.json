@@ -10,12 +10,15 @@
     "build": "pnpm --parallel -r run build",
     "build:web": "pnpm --filter @solar-pm/web build",
     "build:api": "pnpm --filter @solar-pm/api build",
+    "prisma:generate": "pnpm --filter @solar-pm/prisma generate",
+    "prisma:migrate:deploy": "pnpm --filter @solar-pm/prisma migrate:deploy",
     "db:generate": "pnpm --filter @solar-pm/prisma generate",
     "db:migrate": "pnpm --filter @solar-pm/prisma migrate:dev",
     "db:push": "pnpm --filter @solar-pm/prisma db:push",
     "db:studio": "pnpm --filter @solar-pm/prisma studio",
     "lint": "pnpm --parallel -r run lint",
-    "clean": "pnpm --parallel -r run clean && rm -rf node_modules"
+    "clean": "pnpm --parallel -r run clean && rm -rf node_modules",
+    "start:api": "pnpm prisma:generate && pnpm prisma:migrate:deploy && pnpm --filter @solar-pm/api start:prod"
   },
   "engines": {
     "node": ">=18.0.0",
