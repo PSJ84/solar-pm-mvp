@@ -18,6 +18,8 @@ import {
   Trash2,
   Eye,
   EyeOff,
+  PanelLeftOpen,
+  X,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn, STATUS_LABELS, formatRelativeTime, getProgressColor } from '@/lib/utils';
@@ -125,6 +127,7 @@ export default function ProjectDetailPage() {
   const [memoExpandedMap, setMemoExpandedMap] = useState<Record<string, boolean>>({});
   const [addTaskModalStageId, setAddTaskModalStageId] = useState<string | null>(null);
   const [checklistExpandedMap, setChecklistExpandedMap] = useState<Record<string, boolean>>({});
+  const [isStageDrawerOpen, setIsStageDrawerOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type?: 'error' | 'info' | 'success' } | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const memoInputRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
@@ -249,6 +252,59 @@ export default function ProjectDetailPage() {
       (stage) => showHiddenStages || stage.isActive !== false,
     );
   }, [projectWithDerived?.stages, showHiddenStages]);
+
+  const renderStageListItems = () =>
+    visibleStages.map((stage) => {
+      const isActive = stage.id === activeStageId;
+      const stageIsVisible = stage.isActive !== false;
+      const activeStageTasks = (stage.tasks || []).filter((t) => t.isActive !== false);
+      const completedTasks = activeStageTasks.filter((t) => t.status === 'completed').length;
+      const totalTasks = activeStageTasks.length;
+      const statusForIcon = (stage as DerivedStage).derivedStatus || stage.status;
+
+      return (
+        <div key={stage.id} className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              handleStageClick(stage.id);
+              setIsStageDrawerOpen(false);
+            }}
+            className={cn(
+              'w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors flex-1',
+              isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50',
+              !stageIsVisible && showHiddenStages && 'opacity-60',
+            )}
+          >
+            <div className="flex items-center gap-2">
+              {statusForIcon === 'completed' ? (
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              ) : statusForIcon === 'active' ? (
+                <Clock className="h-4 w-4 text-blue-500" />
+              ) : statusForIcon === 'inactive' ? (
+                <EyeOff className="h-4 w-4 text-slate-400" />
+              ) : (
+                <Circle className="h-4 w-4 text-slate-300" />
+              )}
+              <span className="text-sm font-medium">{stage.template?.name || '단계'}</span>
+              {!stageIsVisible && showHiddenStages && (
+                <span className="px-1.5 py-0.5 text-[10px] bg-slate-100 text-slate-600 rounded-full">숨김</span>
+              )}
+            </div>
+            <span className="text-xs text-slate-500">{completedTasks}/{totalTasks}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleStageActiveToggle(stage.id, stage.isActive)}
+            disabled={isTogglingStage}
+            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg disabled:opacity-50"
+            aria-label={`단계 ${stage.template?.name || ''} ${stageIsVisible ? '숨기기' : '표시하기'}`}
+          >
+            {stageIsVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+          </button>
+        </div>
+      );
+    });
 
   const { data: activityLog } = useQuery<TaskHistory[]>({
     queryKey: activityQueryKey,
@@ -903,9 +959,80 @@ export default function ProjectDetailPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="md:hidden mb-4 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setIsStageDrawerOpen(true)}
+            className="flex items-center justify-between gap-3 flex-1 px-4 py-3 rounded-lg border border-slate-200 bg-white shadow-sm"
+            aria-expanded={isStageDrawerOpen}
+            aria-label="단계 선택"
+          >
+            <div className="flex items-center gap-2">
+              <PanelLeftOpen className="h-5 w-5 text-slate-500" />
+              <div className="flex flex-col items-start">
+                <span className="text-xs text-slate-500">현재 단계</span>
+                <span className="text-sm font-semibold text-slate-900">
+                  {activeStage?.template?.name || '단계 선택'}
+                </span>
+              </div>
+            </div>
+            <span className="text-xs text-slate-500">변경하기</span>
+          </button>
+        </div>
+
+        {isStageDrawerOpen && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <button
+              type="button"
+              aria-label="단계 선택 닫기"
+              className="absolute inset-0 bg-black/50"
+              onClick={() => setIsStageDrawerOpen(false)}
+            />
+            <div className="absolute inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-2xl max-h-[70vh] overflow-y-auto p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-semibold text-slate-900">단계 선택</p>
+                  <p className="text-xs text-slate-500">프로젝트 단계를 선택하세요.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsStageDrawerOpen(false)}
+                  className="p-2 rounded-full hover:bg-slate-100 text-slate-500"
+                  aria-label="닫기"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between text-sm text-slate-700">
+                <span>숨김 단계 보기</span>
+                <button
+                  type="button"
+                  onClick={() => setShowHiddenStages((prev) => !prev)}
+                  className={cn(
+                    'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                    showHiddenStages ? 'bg-blue-600' : 'bg-slate-200',
+                  )}
+                  aria-pressed={showHiddenStages}
+                  aria-label="숨김 단계 보기 토글"
+                >
+                  <span
+                    className={cn(
+                      'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
+                      showHiddenStages ? 'translate-x-5' : 'translate-x-1',
+                    )}
+                  />
+                </button>
+              </div>
+
+              <div className="space-y-2">{renderStageListItems()}</div>
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-6">
           {/* 좌측: 단계 탭 */}
-          <div className="w-64 flex-shrink-0 hidden lg:block">
+          <div className="w-64 flex-shrink-0 hidden md:block">
             <div className="bg-white rounded-xl border border-slate-200 p-4 sticky top-28">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-slate-900">프로젝트 단계</h3>
@@ -938,66 +1065,9 @@ export default function ProjectDetailPage() {
                 <span>단계 추가</span>
               </button>
             </div>
-            <nav className="space-y-1">
-              {visibleStages.map((stage) => {
-                  const isActive = stage.id === activeStageId;
-                  const stageIsVisible = stage.isActive !== false;
-                  const activeStageTasks = (stage.tasks || []).filter((t) => t.isActive !== false);
-                  const completedTasks = activeStageTasks.filter((t) => t.status === 'completed').length;
-                  const totalTasks = activeStageTasks.length;
-                  const statusForIcon = (stage as DerivedStage).derivedStatus || stage.status;
-
-                  return (
-                    <div key={stage.id} className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleStageClick(stage.id)}
-                        className={cn(
-                          'w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors flex-1',
-                          isActive
-                            ? 'bg-blue-50 text-blue-700'
-                            : 'text-slate-600 hover:bg-slate-50',
-                          !stageIsVisible && showHiddenStages && 'opacity-60',
-                        )}
-                      >
-                        <div className="flex items-center gap-2">
-                          {statusForIcon === 'completed' ? (
-                            <CheckCircle2 className="h-4 w-4 text-green-500" />
-                          ) : statusForIcon === 'active' ? (
-                            <Clock className="h-4 w-4 text-blue-500" />
-                          ) : statusForIcon === 'inactive' ? (
-                            <EyeOff className="h-4 w-4 text-slate-400" />
-                          ) : (
-                            <Circle className="h-4 w-4 text-slate-300" />
-                          )}
-                          <span className="text-sm font-medium">
-                            {stage.template?.name || '단계'}
-                          </span>
-                          {!stageIsVisible && showHiddenStages && (
-                            <span className="px-1.5 py-0.5 text-[10px] bg-slate-100 text-slate-600 rounded-full">
-                              숨김
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-xs text-slate-500">
-                          {completedTasks}/{totalTasks}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleStageActiveToggle(stage.id, stage.isActive)}
-                        disabled={isTogglingStage}
-                        className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg disabled:opacity-50"
-                        aria-label={`단계 ${stage.template?.name || ''} ${stageIsVisible ? '숨기기' : '표시하기'}`}
-                      >
-                        {stageIsVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  );
-                })}
-              </nav>
-            </div>
+            <nav className="space-y-1">{renderStageListItems()}</nav>
           </div>
+        </div>
 
           {/* 중앙: 태스크 테이블 */}
           <div className="flex-1 min-w-0">

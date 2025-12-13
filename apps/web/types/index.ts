@@ -78,6 +78,22 @@ export interface Task {
   stage?: string;
 }
 
+export interface MyTaskItem {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  dueDate?: string | null;
+  dDay?: number | null;
+  project?: {
+    id: string;
+    name: string;
+  } | null;
+  stage?: {
+    id: string;
+    name: string;
+  } | null;
+}
+
 export type TaskStatus = 'pending' | 'in_progress' | 'waiting' | 'completed';
 
 export interface TaskHistory {

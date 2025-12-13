@@ -52,12 +52,20 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold text-slate-900">대시보드</h1>
           <p className="text-slate-600 mt-1">오늘의 태양광 프로젝트 현황을 확인하세요.</p>
         </div>
-        <Link
-          href="/tomorrow"
-          className="inline-flex items-center justify-center rounded-lg bg-solar-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-solar-600"
-        >
-          내일 뭐하지?
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Link
+            href="/tasks"
+            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
+          >
+            내 태스크
+          </Link>
+          <Link
+            href="/tomorrow"
+            className="inline-flex items-center justify-center rounded-lg bg-solar-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-solar-600"
+          >
+            내일 뭐하지?
+          </Link>
+        </div>
       </div>
 
       {/* 요약 카드 */}
