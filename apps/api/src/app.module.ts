@@ -12,6 +12,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { StagesModule } from './stages/stages.module';
 import { TemplatesModule } from './templates/templates.module';
 import { ChecklistModule } from './checklist/checklist.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { ChecklistModule } from './checklist/checklist.module';
     StagesModule,
     TemplatesModule,
     ChecklistModule,
+    HealthModule,
   ],
 })
 export class AppModule {}
