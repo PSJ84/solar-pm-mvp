@@ -101,6 +101,12 @@ pnpm dev:api   # NestJS (http://localhost:3001)
 - **Swagger 문서**: http://localhost:3001/api/docs
 - **Prisma Studio**: `pnpm db:studio` (http://localhost:5555)
 
+### 배포 시 Vercel ↔ Railway 연동 점검
+
+- Railway Public URL이 변경되면 **Vercel 프로젝트의 `NEXT_PUBLIC_API_URL` 환경변수**도 동일한 값(예: `https://<railway-subdomain>.railway.app`)으로 맞춘다.
+- 프론트 빌드 전 Vercel Environment Variables에서 API URL이 최신인지 확인한다.
+- /api/health가 200 OK를 반환하는지 Railway Logs에서 확인해 API 컨테이너가 실제로 기동했는지 점검한다.
+
 ## 📋 주요 API 엔드포인트
 
 ```
