@@ -89,6 +89,75 @@ export class TasksService {
     return task;
   }
 
+  async getMyTasks(bucket = 'all', userId?: string) {
+    await this.resolveUserId(userId);
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const endOfToday = new Date(startOfToday);
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const startOfTomorrow = new Date(startOfToday);
+    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+
+    const endOfTomorrow = new Date(startOfTomorrow);
+    endOfTomorrow.setHours(23, 59, 59, 999);
+
+    const where: Prisma.TaskWhereInput = {
+      deletedAt: null,
+      isActive: true,
+    };
+
+    if (bucket === 'today') {
+      where.dueDate = { gte: startOfToday, lte: endOfToday };
+    } else if (bucket === 'tomorrow') {
+      where.dueDate = { gte: startOfTomorrow, lte: endOfTomorrow };
+    } else if (bucket === 'overdue') {
+      where.dueDate = { lt: startOfToday };
+    }
+
+    const tasks = await this.prisma.task.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        dueDate: true,
+        projectStage: {
+          select: {
+            id: true,
+            template: { select: { name: true } },
+            project: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: {
+        dueDate: 'asc',
+      },
+    });
+
+    return tasks.map((task) => {
+      const dDay = task.dueDate
+        ? Math.floor((task.dueDate.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+
+      return {
+        id: task.id,
+        title: task.title,
+        status: task.status,
+        dueDate: task.dueDate,
+        dDay,
+        project: task.projectStage?.project
+          ? { id: task.projectStage.project.id, name: task.projectStage.project.name }
+          : null,
+        stage: task.projectStage
+          ? { id: task.projectStage.id, name: task.projectStage.template?.name || '단계' }
+          : null,
+      };
+    });
+  }
+
   /**
    * 태스크 상세 조회
    */
