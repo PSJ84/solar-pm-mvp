@@ -3,9 +3,11 @@ import type { TemplateDetailDto, TemplateListItemDto } from '../../../packages/s
 import type { MyWorkTaskDto } from '@/types/dashboard';
 import { api } from './api/client';
 import { getTomorrowDashboard } from './api/dashboard';
+import { getMyTasks } from './api/tasks';
 
 export { api };
 export { getTomorrowDashboard } from './api/dashboard';
+export { getMyTasks } from './api/tasks';
 
 // ===========================
 // 타입 정의
@@ -120,6 +122,7 @@ export const tasksApi = {
   delete: (id: string) => api.delete(`/tasks/${id}`),
   getAvailableTaskTemplates: (stageId: string) =>
     api.get(`/tasks/stages/${stageId}/available-templates`),
+  getMyTasks: (bucket?: string) => getMyTasks(bucket),
 };
 
 // Stages

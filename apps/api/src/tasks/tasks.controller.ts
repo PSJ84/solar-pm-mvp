@@ -9,6 +9,7 @@ import {
   Param,
   UseGuards,
   Req,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { TasksService } from './tasks.service';
@@ -27,6 +28,13 @@ export class TasksController {
   async create(@Body() dto: CreateTaskDto, @Req() req: any) {
     const user = (req as any).user;
     return this.tasksService.create(dto, user?.sub);
+  }
+
+  @Get('my')
+  @ApiOperation({ summary: '내 태스크 목록 조회' })
+  async getMyTasks(@Query('bucket') bucket: string, @Req() req: any) {
+    const user = (req as any).user;
+    return this.tasksService.getMyTasks(bucket, user?.sub);
   }
 
   @Get(':id')

@@ -75,7 +75,29 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{children}</main>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 md:pb-8">{children}</main>
+
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 md:hidden">
+        <div className="grid grid-cols-3 max-w-3xl mx-auto">
+          {navItems.map((item) => {
+            const isActive = pathname?.startsWith(item.href);
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'flex flex-col items-center justify-center gap-1 py-3 text-xs font-medium transition-colors',
+                  isActive ? 'text-blue-600' : 'text-slate-600 hover:text-slate-900',
+                )}
+              >
+                <item.icon className={cn('h-5 w-5', isActive ? 'text-blue-600' : 'text-slate-500')} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
