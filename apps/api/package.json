@@ -5,7 +5,7 @@
   "scripts": {
   "prestart": "pnpm --filter @solar-pm/prisma generate && pnpm --filter @solar-pm/prisma migrate:deploy:log",
   "prestart:prod": "pnpm --filter @solar-pm/prisma generate && pnpm --filter @solar-pm/prisma migrate:deploy:log",
-  "prebuild": "prisma generate --schema=../../packages/prisma/schema.prisma",
+  "prebuild": "DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} prisma generate --schema=../../packages/prisma/schema.prisma",
   "dev": "ts-node -r tsconfig-paths/register src/main.ts",
   "build": "nest build",
   "start": "node dist/main.js",

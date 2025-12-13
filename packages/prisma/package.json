@@ -4,14 +4,14 @@
   "private": true,
   "main": "./index.ts",
   "types": "./index.ts",
-"scripts": {
-  "generate": "prisma generate",
-  "migrate:dev": "prisma migrate dev",
-  "migrate:deploy": "prisma migrate deploy",
-  "migrate:deploy:log": "echo '[prisma] migrate deploy (uses DIRECT_URL if set)' && prisma migrate deploy && prisma migrate status",
-  "db:push": "prisma db push",
-  "studio": "prisma studio",
-  "seed": "ts-node --project tsconfig.seed.json --transpile-only seed.ts"
+  "scripts": {
+  "generate": "DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} prisma generate",
+  "migrate:dev": "DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} prisma migrate dev",
+  "migrate:deploy": "DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} prisma migrate deploy",
+  "migrate:deploy:log": "echo '[prisma] migrate deploy (uses DIRECT_URL if set, else DATABASE_URL fallback)' && DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} prisma migrate deploy && DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} prisma migrate status",
+  "db:push": "DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} prisma db push",
+  "studio": "DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} prisma studio",
+  "seed": "DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} ts-node --project tsconfig.seed.json --transpile-only seed.ts"
 },
   "dependencies": {
     "@prisma/client": "^5.22.0"
