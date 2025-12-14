@@ -122,6 +122,17 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsDateString()
   completedDate?: string | null;
+
+  // 호환용 입력 필드 (startedAt/completedAt)
+  @ApiPropertyOptional({ description: '태스크 시작일(호환 키)', type: String })
+  @IsOptional()
+  @IsDateString()
+  startedAt?: string | null;
+
+  @ApiPropertyOptional({ description: '태스크 완료일(호환 키)', type: String })
+  @IsOptional()
+  @IsDateString()
+  completedAt?: string | null;
 }
 
 export class UpdateTaskActiveDto {
