@@ -1,6 +1,7 @@
 
 // apps/api/src/tasks/dto/task.dto.ts
 import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum TaskStatus {
@@ -23,6 +24,7 @@ export class CreateTaskDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()
+  @Transform(({ value }) => (value === '' ? null : value))
   dueDate?: string | null;
 
   @ApiPropertyOptional({ description: '태스크 메모' })
@@ -39,11 +41,13 @@ export class CreateTaskDto {
   @ApiPropertyOptional({ description: '태스크 시작일' })
   @IsOptional()
   @IsDateString()
+  @Transform(({ value }) => (value === '' ? null : value))
   startDate?: string | null;
 
   @ApiPropertyOptional({ description: '태스크 완료일' })
   @IsOptional()
   @IsDateString()
+  @Transform(({ value }) => (value === '' ? null : value))
   completedDate?: string | null;
 
   @ApiPropertyOptional()
@@ -106,6 +110,7 @@ export class UpdateTaskDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()
+  @Transform(({ value }) => (value === '' ? null : value))
   dueDate?: string | null;
 
   @ApiPropertyOptional()
@@ -116,22 +121,26 @@ export class UpdateTaskDto {
   @ApiPropertyOptional({ description: '태스크 시작일' })
   @IsOptional()
   @IsDateString()
+  @Transform(({ value }) => (value === '' ? null : value))
   startDate?: string | null;
 
   @ApiPropertyOptional({ description: '태스크 완료일' })
   @IsOptional()
   @IsDateString()
+  @Transform(({ value }) => (value === '' ? null : value))
   completedDate?: string | null;
 
   // 호환용 입력 필드 (startedAt/completedAt)
   @ApiPropertyOptional({ description: '태스크 시작일(호환 키)', type: String })
   @IsOptional()
   @IsDateString()
+  @Transform(({ value }) => (value === '' ? null : value))
   startedAt?: string | null;
 
   @ApiPropertyOptional({ description: '태스크 완료일(호환 키)', type: String })
   @IsOptional()
   @IsDateString()
+  @Transform(({ value }) => (value === '' ? null : value))
   completedAt?: string | null;
 }
 

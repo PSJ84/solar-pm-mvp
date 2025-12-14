@@ -1,5 +1,5 @@
 // apps/api/src/tasks/tasks.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, TaskStatus } from './dto/task.dto';
@@ -75,6 +75,22 @@ export class TasksService {
     if (completedDate && completedDate <= endOfToday) return TaskStatus.COMPLETED;
     if (startDate && startDate <= endOfToday) return TaskStatus.IN_PROGRESS;
     return TaskStatus.PENDING;
+  }
+
+  private parseDateInput(
+    value: string | null | undefined,
+    fieldName: 'startDate' | 'completedDate' | 'dueDate',
+  ): Date | null | undefined {
+    if (value === undefined) return undefined;
+    if (value === null || value === '') return null;
+
+    const parsed = new Date(value);
+
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException(`Invalid ${fieldName} value`);
+    }
+
+    return parsed;
   }
 
   /**
@@ -278,21 +294,15 @@ export class TasksService {
     const incomingStartDate = dto.startDate ?? dto.startedAt;
     const incomingCompletedDate = dto.completedDate ?? dto.completedAt;
 
-    const nextStartDate =
-      incomingStartDate !== undefined
-        ? incomingStartDate
-          ? new Date(incomingStartDate)
-          : null
-        : existing.startDate;
-    const nextCompletedDate =
-      incomingCompletedDate !== undefined
-        ? incomingCompletedDate
-          ? new Date(incomingCompletedDate)
-          : null
-        : existing.completedDate;
+    const parsedStartDate = this.parseDateInput(incomingStartDate, 'startDate');
+    const parsedCompletedDate = this.parseDateInput(incomingCompletedDate, 'completedDate');
+    const parsedDueDate = this.parseDateInput(dto.dueDate, 'dueDate');
 
-    const shouldDeriveStatus =
-      incomingStartDate !== undefined || incomingCompletedDate !== undefined;
+    const nextStartDate = parsedStartDate !== undefined ? parsedStartDate : existing.startDate;
+    const nextCompletedDate =
+      parsedCompletedDate !== undefined ? parsedCompletedDate : existing.completedDate;
+
+    const shouldDeriveStatus = parsedStartDate !== undefined || parsedCompletedDate !== undefined;
     const derivedStatus = shouldDeriveStatus
       ? this.deriveStatusFromDates(nextStartDate, nextCompletedDate)
       : undefined;
@@ -306,24 +316,13 @@ export class TasksService {
     const data: Prisma.TaskUpdateInput = {
       title: dto.title,
       description: dto.description,
-      dueDate:
-        dto.dueDate !== undefined ? (dto.dueDate ? new Date(dto.dueDate) : null) : undefined,
+      dueDate: parsedDueDate,
       notificationEnabled:
         dto.notificationEnabled !== undefined ? dto.notificationEnabled : undefined,
       isMandatory: dto.isMandatory !== undefined ? dto.isMandatory : undefined,
       isActive: dto.isActive !== undefined ? dto.isActive : undefined,
-      startDate:
-        incomingStartDate !== undefined
-          ? incomingStartDate
-            ? new Date(incomingStartDate)
-            : null
-          : undefined,
-      completedDate:
-        incomingCompletedDate !== undefined
-          ? incomingCompletedDate
-            ? new Date(incomingCompletedDate)
-            : null
-          : undefined,
+      startDate: parsedStartDate,
+      completedDate: parsedCompletedDate,
       status: derivedStatus, // undefined면 기존 값 유지
       ...(dto.memo !== undefined || dto.note !== undefined
         ? { memo: dto.memo ?? dto.note ?? null }
