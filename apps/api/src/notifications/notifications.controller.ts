@@ -9,6 +9,7 @@ import {
   Post,
   Query,
   Req,
+  BadRequestException,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -16,6 +17,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger'
 import { NotificationsService } from './notifications.service';
 import { PushService } from './push.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { TelegramService } from './telegram.service';
 
 @ApiTags('Notifications')
 @Controller('notifications')
@@ -23,6 +25,7 @@ export class NotificationsController {
   constructor(
     private readonly notificationsService: NotificationsService,
     private readonly pushService: PushService,
+    private readonly telegramService: TelegramService,
   ) {}
 
   @Get()
@@ -73,5 +76,33 @@ export class NotificationsController {
   @Post('push/register-token')
   async registerFcmToken(@Body() body: { userId: string; fcmToken: string }) {
     return this.pushService.registerToken(body.userId, body.fcmToken);
+  }
+
+  @Post('telegram/trigger')
+  async triggerTelegram(
+    @Headers('x-cron-secret') secret: string,
+    @Query('mode') mode: 'daily' | 'hourly' = 'daily',
+  ) {
+    if (secret !== process.env.CRON_SECRET) {
+      throw new UnauthorizedException('Invalid cron secret');
+    }
+
+    if (!['daily', 'hourly'].includes(mode)) {
+      throw new BadRequestException('mode must be daily or hourly');
+    }
+
+    return this.telegramService.sendNotifications(mode);
+  }
+
+  @Post('telegram/test')
+  async triggerTelegramTest(@Headers('x-cron-secret') secret: string) {
+    const requireSecret =
+      String(process.env.TELEGRAM_TEST_REQUIRE_SECRET ?? 'true').toLowerCase() !== 'false';
+
+    if (requireSecret && secret !== process.env.CRON_SECRET) {
+      throw new UnauthorizedException('Invalid cron secret');
+    }
+
+    return this.telegramService.sendTestMessage();
   }
 }

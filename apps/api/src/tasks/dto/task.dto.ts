@@ -98,6 +98,11 @@ export class UpdateTaskDto {
   @IsString()
   note?: string;
 
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  notificationEnabled?: boolean;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()
