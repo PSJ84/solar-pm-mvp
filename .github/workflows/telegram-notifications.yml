@@ -1,0 +1,32 @@
+name: Telegram Notifications
+
+on:
+  schedule:
+    - cron: '0 23 * * *' # 08:00 KST daily
+    - cron: '0 * * * *'  # hourly
+  workflow_dispatch:
+
+jobs:
+  telegram-daily:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 23 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger daily Telegram notifications
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail -X POST "$API_URL/api/notifications/telegram/trigger?mode=daily" \
+            -H "x-cron-secret: $CRON_SECRET"
+
+  telegram-hourly:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 * * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger hourly Telegram notifications
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail -X POST "$API_URL/api/notifications/telegram/trigger?mode=hourly" \
+            -H "x-cron-secret: $CRON_SECRET"

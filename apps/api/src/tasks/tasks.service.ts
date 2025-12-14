@@ -292,6 +292,8 @@ export class TasksService {
       description: dto.description,
       dueDate:
         dto.dueDate !== undefined ? (dto.dueDate ? new Date(dto.dueDate) : null) : undefined,
+      notificationEnabled:
+        dto.notificationEnabled !== undefined ? dto.notificationEnabled : undefined,
       isMandatory: dto.isMandatory !== undefined ? dto.isMandatory : undefined,
       isActive: dto.isActive !== undefined ? dto.isActive : undefined,
       startDate:
