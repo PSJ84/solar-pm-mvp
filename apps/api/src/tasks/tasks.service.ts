@@ -146,6 +146,10 @@ export class TasksService {
         title: true,
         status: true,
         dueDate: true,
+        startDate: true,
+        completedDate: true,
+        startedAt: true,
+        completedAt: true,
         notificationEnabled: true,
         createdAt: true,
         updatedAt: true,
@@ -172,6 +176,10 @@ export class TasksService {
         title: task.title,
         status: task.status,
         dueDate: task.dueDate,
+        startDate: task.startDate,
+        completedDate: task.completedDate,
+        startedAt: task.startedAt,
+        completedAt: task.completedAt,
         notificationEnabled: task.notificationEnabled,
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
@@ -267,16 +275,24 @@ export class TasksService {
       changes.push(`활성 여부 변경`);
     }
 
+    const incomingStartDate = dto.startDate ?? dto.startedAt;
+    const incomingCompletedDate = dto.completedDate ?? dto.completedAt;
+
     const nextStartDate =
-      dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : existing.startDate;
+      incomingStartDate !== undefined
+        ? incomingStartDate
+          ? new Date(incomingStartDate)
+          : null
+        : existing.startDate;
     const nextCompletedDate =
-      dto.completedDate !== undefined
-        ? dto.completedDate
-          ? new Date(dto.completedDate)
+      incomingCompletedDate !== undefined
+        ? incomingCompletedDate
+          ? new Date(incomingCompletedDate)
           : null
         : existing.completedDate;
 
-    const shouldDeriveStatus = dto.startDate !== undefined || dto.completedDate !== undefined;
+    const shouldDeriveStatus =
+      incomingStartDate !== undefined || incomingCompletedDate !== undefined;
     const derivedStatus = shouldDeriveStatus
       ? this.deriveStatusFromDates(nextStartDate, nextCompletedDate)
       : undefined;
@@ -297,11 +313,15 @@ export class TasksService {
       isMandatory: dto.isMandatory !== undefined ? dto.isMandatory : undefined,
       isActive: dto.isActive !== undefined ? dto.isActive : undefined,
       startDate:
-        dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : undefined,
+        incomingStartDate !== undefined
+          ? incomingStartDate
+            ? new Date(incomingStartDate)
+            : null
+          : undefined,
       completedDate:
-        dto.completedDate !== undefined
-          ? dto.completedDate
-            ? new Date(dto.completedDate)
+        incomingCompletedDate !== undefined
+          ? incomingCompletedDate
+            ? new Date(incomingCompletedDate)
             : null
           : undefined,
       status: derivedStatus, // undefined면 기존 값 유지
