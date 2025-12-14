@@ -8,6 +8,9 @@ import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, TaskStatus } from '.
 export class TasksService {
   constructor(private prisma: PrismaService) {}
 
+  private static readonly KST_OFFSET_MINUTES = 9 * 60;
+  private static readonly DAY_MS = 24 * 60 * 60 * 1000;
+
   // NOTE: 회사/사용자 컨텍스트가 없을 때도 동작하도록 기본값을 보장
   private async resolveCompanyId(optionalCompanyId?: string): Promise<string> {
     if (optionalCompanyId) return optionalCompanyId;
@@ -69,8 +72,8 @@ export class TasksService {
     startDate?: Date | null,
     completedDate?: Date | null,
   ): TaskStatus {
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
+    const startOfToday = this.getKstDayStart();
+    const endOfToday = new Date(startOfToday.getTime() + TasksService.DAY_MS - 1);
 
     if (completedDate && completedDate <= endOfToday) return TaskStatus.COMPLETED;
     if (startDate && startDate <= endOfToday) return TaskStatus.IN_PROGRESS;
@@ -91,6 +94,24 @@ export class TasksService {
     }
 
     return parsed;
+  }
+
+  private getKstDayStart(base: Date = new Date()): Date {
+    const offsetMs = TasksService.KST_OFFSET_MINUTES * 60 * 1000;
+    const kstDate = new Date(base.getTime() + offsetMs);
+    const startOfKstDay = new Date(
+      Date.UTC(
+        kstDate.getUTCFullYear(),
+        kstDate.getUTCMonth(),
+        kstDate.getUTCDate(),
+        0,
+        0,
+        0,
+        0,
+      ),
+    );
+
+    return new Date(startOfKstDay.getTime() - offsetMs);
   }
 
   /**
@@ -130,17 +151,9 @@ export class TasksService {
   async getMyTasks(bucket = 'all', userId?: string) {
     await this.resolveUserId(userId);
 
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-
-    const endOfToday = new Date(startOfToday);
-    endOfToday.setHours(23, 59, 59, 999);
-
-    const startOfTomorrow = new Date(startOfToday);
-    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
-
-    const endOfTomorrow = new Date(startOfTomorrow);
-    endOfTomorrow.setHours(23, 59, 59, 999);
+    const startOfToday = this.getKstDayStart();
+    const startOfTomorrow = new Date(startOfToday.getTime() + TasksService.DAY_MS);
+    const startOfDayAfterTomorrow = new Date(startOfTomorrow.getTime() + TasksService.DAY_MS);
 
     const where: Prisma.TaskWhereInput = {
       deletedAt: null,
@@ -148,9 +161,9 @@ export class TasksService {
     };
 
     if (bucket === 'today') {
-      where.dueDate = { gte: startOfToday, lte: endOfToday };
+      where.dueDate = { gte: startOfToday, lt: startOfTomorrow };
     } else if (bucket === 'tomorrow') {
-      where.dueDate = { gte: startOfTomorrow, lte: endOfTomorrow };
+      where.dueDate = { gte: startOfTomorrow, lt: startOfDayAfterTomorrow };
     } else if (bucket === 'overdue') {
       where.dueDate = { lt: startOfToday };
     }
@@ -184,7 +197,7 @@ export class TasksService {
 
     return tasks.map((task) => {
       const dDay = task.dueDate
-        ? Math.floor((task.dueDate.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24))
+        ? Math.floor((task.dueDate.getTime() - startOfToday.getTime()) / TasksService.DAY_MS)
         : null;
 
       return {
