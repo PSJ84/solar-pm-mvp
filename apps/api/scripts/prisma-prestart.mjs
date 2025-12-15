@@ -100,18 +100,18 @@ function main() {
   }
 
   const env = prepareEnv();
-  const workspaceRoot = path.resolve(schemaPath, '..', '..', '..');
+  const schemaDir = path.dirname(schemaPath);
   console.log(`[Prisma] Using schema at: ${schemaPath}`);
   console.log(`[Prisma] process.cwd(): ${process.cwd()}`);
   console.log(`[Prisma] currentDir: ${currentDir}`);
-  console.log(`[Prisma] workspace root for pnpm commands: ${workspaceRoot}`);
-  const migrateCmd = `pnpm --filter @solar-pm/prisma prisma migrate deploy --schema ${schemaPath}`;
-  const statusCmd = `pnpm --filter @solar-pm/prisma prisma migrate status --schema ${schemaPath}`;
-  const generateCmd = `pnpm --filter @solar-pm/prisma prisma generate --schema ${schemaPath}`;
+  console.log(`[Prisma] schema directory (cwd for Prisma CLI): ${schemaDir}`);
+  const migrateCmd = `pnpm --dir ${schemaDir} exec prisma migrate deploy --schema ${schemaPath}`;
+  const statusCmd = `pnpm --dir ${schemaDir} exec prisma migrate status --schema ${schemaPath}`;
+  const generateCmd = `pnpm --dir ${schemaDir} exec prisma generate --schema ${schemaPath}`;
 
-  runCommand(generateCmd, env, workspaceRoot);
-  runCommand(migrateCmd, env, workspaceRoot);
-  runCommand(statusCmd, env, workspaceRoot);
+  runCommand(generateCmd, env, schemaDir);
+  runCommand(migrateCmd, env, schemaDir);
+  runCommand(statusCmd, env, schemaDir);
 }
 
 main();
