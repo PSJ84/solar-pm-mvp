@@ -106,6 +106,13 @@ export const projectsApi = {
     api.post<{ id: string; name: string }>(`/projects/${id}/clone`, data || {}),
   addStageFromTemplate: (projectId: string, data: { templateId: string; afterStageId?: string }) =>
     api.post(`/projects/${projectId}/stages/from-template`, data),
+  getProjectVendors: (projectId: string) => api.get(`/projects/${projectId}/vendors`),
+  upsertProjectVendor: (
+    projectId: string,
+    data: { role: string; vendorId: string; contactName?: string; contactPhone?: string; memo?: string },
+  ) => api.post(`/projects/${projectId}/vendors`, data),
+  removeProjectVendor: (projectId: string, role: string) =>
+    api.delete(`/projects/${projectId}/vendors/${role}`),
 };
 
 // Tasks
@@ -164,4 +171,13 @@ export const notificationsApi = {
   getUnreadCount: () => api.get('/notifications/unread-count'),
   markAsRead: (id: string) => api.patch(`/notifications/${id}/read`),
   markAllAsRead: () => api.patch('/notifications/read-all'),
+};
+
+// Vendors
+export const vendorsApi = {
+  getAll: () => api.get('/vendors'),
+  getOne: (id: string) => api.get(`/vendors/${id}`),
+  create: (data: any) => api.post('/vendors', data),
+  update: (id: string, data: any) => api.patch(`/vendors/${id}`, data),
+  delete: (id: string) => api.delete(`/vendors/${id}`),
 };

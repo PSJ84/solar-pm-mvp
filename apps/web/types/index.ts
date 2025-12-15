@@ -18,13 +18,61 @@ export interface Project {
   progress: number;
   totalTasks?: number;
   completedTasks?: number;
+  targetDate?: string | null;
   stages?: ProjectStage[];
   shareLinks?: ShareLink[];
+  projectVendors?: ProjectVendor[];
+  permitNumber?: string;
+  inspectionDate?: string | null;
+  constructionStartAt?: string | null;
+  externalId?: string;
+  sitePassword?: string;
+  siteAccessCode?: string;
+  siteNote?: string | null;
+  businessLicenseNo?: string;
+  devPermitNo?: string;
+  kepcoReceiptNo?: string;
+  farmlandPermitNo?: string;
+  landAddress?: string;
+  landOwner?: string;
+  landLeaseRate?: number | null;
+  ppaPrice?: number | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export type ProjectStatus = 'planning' | 'in_progress' | 'completed' | 'on_hold';
+
+export type VendorRole =
+  | 'structure'
+  | 'electrical'
+  | 'electrical_design'
+  | 'structural_review'
+  | 'epc'
+  | 'om'
+  | 'finance'
+  | 'other';
+
+export interface Vendor {
+  id: string;
+  name: string;
+  contact?: string | null;
+  bizNo?: string | null;
+  bankAccount?: string | null;
+  address?: string | null;
+  memo?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ProjectVendor {
+  id: string;
+  role: VendorRole;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  memo?: string | null;
+  vendor?: Vendor | null;
+}
 
 export interface ProjectStage {
   id: string;
