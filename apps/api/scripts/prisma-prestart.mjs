@@ -1,10 +1,30 @@
+import { existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { URL, fileURLToPath } from 'node:url';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(currentDir, '..', '..', '..');
-const schemaPath = path.resolve(repoRoot, 'packages/prisma/schema.prisma');
+
+function findSchemaPath() {
+  const visited = [];
+  let candidateRoot = currentDir;
+  let depth = 0;
+
+  while (candidateRoot && depth < 8) {
+    const candidate = path.resolve(candidateRoot, 'packages/prisma/schema.prisma');
+    visited.push(candidate);
+    if (existsSync(candidate)) {
+      return { schemaPath: candidate, visited };
+    }
+
+    const parent = path.dirname(candidateRoot);
+    if (parent === candidateRoot) break;
+    candidateRoot = parent;
+    depth += 1;
+  }
+
+  return { schemaPath: null, visited };
+}
 
 function maskDatabaseUrl(raw) {
   if (!raw) return 'DATABASE_URL not set';
@@ -67,8 +87,17 @@ function prepareEnv() {
 }
 
 function main() {
+  const { schemaPath, visited } = findSchemaPath();
+  if (!schemaPath) {
+    console.error('[Prisma] Failed to locate schema.prisma. Checked paths:');
+    visited.forEach((candidate) => console.error(` - ${candidate}`));
+    process.exit(1);
+  }
+
   const env = prepareEnv();
   console.log(`[Prisma] Using schema at: ${schemaPath}`);
+  console.log(`[Prisma] process.cwd(): ${process.cwd()}`);
+  console.log(`[Prisma] currentDir: ${currentDir}`);
   const migrateCmd = `pnpm --filter @solar-pm/prisma prisma migrate deploy --schema ${schemaPath}`;
   const statusCmd = `pnpm --filter @solar-pm/prisma prisma migrate status --schema ${schemaPath}`;
   const generateCmd = `pnpm --filter @solar-pm/prisma prisma generate --schema ${schemaPath}`;
