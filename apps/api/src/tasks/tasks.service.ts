@@ -3,12 +3,12 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, UpdateTaskStatusDto, TaskStatus } from './dto/task.dto';
+import { getKstStartOfDay, parseDateInputToUtc } from '../common/date-kst';
 
 @Injectable()
 export class TasksService {
   constructor(private prisma: PrismaService) {}
 
-  private static readonly KST_OFFSET_MINUTES = 9 * 60;
   private static readonly DAY_MS = 24 * 60 * 60 * 1000;
 
   // NOTE: 회사/사용자 컨텍스트가 없을 때도 동작하도록 기본값을 보장
@@ -87,31 +87,15 @@ export class TasksService {
     if (value === undefined) return undefined;
     if (value === null || value === '') return null;
 
-    const parsed = new Date(value);
-
-    if (Number.isNaN(parsed.getTime())) {
+    try {
+      return parseDateInputToUtc(value, fieldName);
+    } catch (error) {
       throw new BadRequestException(`Invalid ${fieldName} value`);
     }
-
-    return parsed;
   }
 
   private getKstDayStart(base: Date = new Date()): Date {
-    const offsetMs = TasksService.KST_OFFSET_MINUTES * 60 * 1000;
-    const kstDate = new Date(base.getTime() + offsetMs);
-    const startOfKstDay = new Date(
-      Date.UTC(
-        kstDate.getUTCFullYear(),
-        kstDate.getUTCMonth(),
-        kstDate.getUTCDate(),
-        0,
-        0,
-        0,
-        0,
-      ),
-    );
-
-    return new Date(startOfKstDay.getTime() - offsetMs);
+    return getKstStartOfDay(base);
   }
 
   /**
@@ -119,18 +103,21 @@ export class TasksService {
    */
   async create(dto: CreateTaskDto, userId?: string) {
     const resolvedUserId = await this.resolveUserId(userId);
+    const parsedStartDate = this.parseDateInput(dto.startDate, 'startDate') ?? null;
+    const parsedCompletedDate = this.parseDateInput(dto.completedDate, 'completedDate') ?? null;
+    const parsedDueDate = this.parseDateInput(dto.dueDate, 'dueDate') ?? null;
     const data: Prisma.TaskCreateInput = {
       title: dto.title,
       description: dto.description,
-      dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+      dueDate: parsedDueDate,
       isMandatory: dto.isMandatory || false,
       isActive: dto.isActive ?? true,
-      startDate: dto.startDate ? new Date(dto.startDate) : null,
-      completedDate: dto.completedDate ? new Date(dto.completedDate) : null,
+      startDate: parsedStartDate,
+      completedDate: parsedCompletedDate,
       memo: dto.memo ?? dto.note ?? null,
       status: this.deriveStatusFromDates(
-        dto.startDate ? new Date(dto.startDate) : null,
-        dto.completedDate ? new Date(dto.completedDate) : null,
+        parsedStartDate,
+        parsedCompletedDate,
       ),
       projectStage: { connect: { id: dto.projectStageId } },
     };
@@ -398,7 +385,7 @@ export class TasksService {
     // 3) 마감일 (dueDate)
     if (dto.dueDate !== undefined) {
       if (dto.dueDate) {
-        data.dueDate = new Date(dto.dueDate);
+        data.dueDate = this.parseDateInput(dto.dueDate, 'dueDate');
       } else {
         // null 또는 빈 문자열이면 마감일 제거
         data.dueDate = null;

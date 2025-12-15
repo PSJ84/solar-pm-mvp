@@ -1,6 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, TaskStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  formatKst,
+  formatKstIsoString,
+  getDDayDifferenceKst,
+  fromKstToUtc,
+  getKstNow,
+  getKstStartOfDay,
+  toKstDate,
+} from '../common/date-kst';
 
 type TelegramMode = 'daily' | 'hourly';
 
@@ -14,6 +23,7 @@ interface TaskWithProject extends Prisma.TaskGetPayload<{
     reminderIntervalMin: true;
     projectStage: {
       select: {
+        template: { select: { name: true } };
         project: {
           select: {
             id: true;
@@ -28,18 +38,32 @@ interface TaskWithProject extends Prisma.TaskGetPayload<{
 @Injectable()
 export class TelegramService {
   private readonly logger = new Logger(TelegramService.name);
-  private readonly kstOffsetMs = 9 * 60 * 60 * 1000;
 
   constructor(private readonly prisma: PrismaService) {}
 
   async sendNotifications(mode: TelegramMode) {
     const token = process.env.TELEGRAM_BOT_TOKEN;
     const chatId = process.env.TELEGRAM_CHAT_ID;
+    const serverNowUtc = new Date();
+    const serverNowKst = getKstNow();
 
     if (!token || !chatId) {
       const message = 'Telegram configuration missing (TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID)';
       this.logger.error(message);
       throw new Error(message);
+    }
+
+    if (mode === 'hourly' && this.isWithinQuietHours(serverNowKst)) {
+      return {
+        mode,
+        total: 0,
+        sent: 0,
+        skipped: 0,
+        failures: [],
+        skippedReason: 'quiet-hours',
+        serverNowUtc: serverNowUtc.toISOString(),
+        serverNowKst: formatKstIsoString(serverNowUtc),
+      };
     }
 
     const { todayStartKst, todayEndUtc } = this.getTodayBoundaries();
@@ -52,7 +76,7 @@ export class TelegramService {
 
     for (const task of tasks) {
       const dueDate = task.dueDate as Date;
-      const diffDays = this.getDDayDifference(dueDate, todayStartKst);
+      const diffDays = getDDayDifferenceKst(dueDate, todayStartKst);
 
       if (mode === 'daily' && ![7, 1].includes(diffDays)) {
         skipped += 1;
@@ -87,7 +111,15 @@ export class TelegramService {
       }
     }
 
-    return { mode, total: tasks.length, sent, skipped, failures };
+    return {
+      mode,
+      total: tasks.length,
+      sent,
+      skipped,
+      failures,
+      serverNowUtc: serverNowUtc.toISOString(),
+      serverNowKst: formatKstIsoString(serverNowUtc),
+    };
   }
 
   async sendTestMessage(text = 'Telegram notification test') {
@@ -135,6 +167,7 @@ export class TelegramService {
         reminderIntervalMin: true,
         projectStage: {
           select: {
+            template: { select: { name: true } },
             project: {
               select: {
                 id: true,
@@ -148,19 +181,13 @@ export class TelegramService {
     });
   }
 
-  private getDDayDifference(dueDate: Date, todayStartKst: Date) {
-    const dueKstStart = this.getKstStartOfDay(this.toKstDate(dueDate));
-    const diffMs = dueKstStart.getTime() - todayStartKst.getTime();
-    return Math.round(diffMs / (1000 * 60 * 60 * 24));
-  }
-
   private getTodayBoundaries() {
-    const nowKst = this.getKstNow();
-    const todayStartKst = this.getKstStartOfDay(nowKst);
+    const nowKst = getKstNow();
+    const todayStartKst = getKstStartOfDay(nowKst);
     const todayEndKst = new Date(todayStartKst);
     todayEndKst.setDate(todayEndKst.getDate() + 1);
 
-    const todayEndUtc = this.fromKstToUtc(todayEndKst);
+    const todayEndUtc = fromKstToUtc(todayEndKst);
 
     return { todayStartKst, todayEndUtc };
   }
@@ -174,13 +201,29 @@ export class TelegramService {
 
   private wasNotifiedToday(lastNotifiedAt: Date | null, todayStartKst: Date) {
     if (!lastNotifiedAt) return false;
-    const notifiedKst = this.toKstDate(new Date(lastNotifiedAt));
-    const notifiedStart = this.getKstStartOfDay(notifiedKst);
+    const notifiedKst = toKstDate(new Date(lastNotifiedAt));
+    const notifiedStart = getKstStartOfDay(notifiedKst);
     return notifiedStart.getTime() === todayStartKst.getTime();
+  }
+
+  private isWithinQuietHours(nowKst: Date) {
+    const quietStart = Number(process.env.TELEGRAM_QUIET_START ?? 20);
+    const quietEnd = Number(process.env.TELEGRAM_QUIET_END ?? 9);
+    const currentHour = nowKst.getHours();
+
+    if (Number.isNaN(quietStart) || Number.isNaN(quietEnd)) return false;
+    if (quietStart === quietEnd) return false;
+
+    if (quietStart < quietEnd) {
+      return currentHour >= quietStart && currentHour < quietEnd;
+    }
+
+    return currentHour >= quietStart || currentHour < quietEnd;
   }
 
   private buildMessage(task: TaskWithProject, diffDays: number, dueDate: Date) {
     const projectName = this.escapeHtml(task.projectStage?.project?.name || '프로젝트');
+    const stageName = this.escapeHtml(task.projectStage?.template?.name || '단계');
     const title = this.escapeHtml(task.title);
     const dDayText =
       diffDays > 0
@@ -192,10 +235,10 @@ export class TelegramService {
     const statusLabel = diffDays < 0 ? '⏰ 마감 지남' : '📌 마감 예정';
 
     return [
-      `<b>${dDayText}</b> | <b>${projectName}</b>`,
-      `• 태스크: ${title}`,
-      `• 마감: ${this.formatKst(dueDate)}`,
-      `• 상태: ${statusLabel}`,
+      `[${dDayText}] ${projectName} / ${stageName}`,
+      `${title}`,
+      `마감: ${formatKst(dueDate)}`,
+      `상태: ${statusLabel}`,
     ].join('\n');
   }
 
@@ -218,49 +261,18 @@ export class TelegramService {
     }
   }
 
-  private getKstNow() {
-    const now = new Date();
-    const utcMs = now.getTime() + now.getTimezoneOffset() * 60 * 1000;
-    return new Date(utcMs + this.kstOffsetMs);
-  }
-
-  private toKstDate(date: Date) {
-    const utcMs = date.getTime() + date.getTimezoneOffset() * 60 * 1000;
-    return new Date(utcMs + this.kstOffsetMs);
-  }
-
-  private fromKstToUtc(date: Date) {
-    return new Date(date.getTime() - this.kstOffsetMs);
-  }
-
-  private getKstStartOfDay(date: Date) {
-    const kstDate = new Date(date);
-    kstDate.setHours(0, 0, 0, 0);
-    return kstDate;
-  }
-
   private getDayRangeUtc(daysFromToday: number) {
-    const nowKst = this.getKstNow();
+    const nowKst = getKstNow();
     const target = new Date(nowKst);
     target.setDate(target.getDate() + daysFromToday);
-    const startKst = this.getKstStartOfDay(target);
+    const startKst = getKstStartOfDay(target);
     const endKst = new Date(startKst);
     endKst.setDate(endKst.getDate() + 1);
 
     return {
-      startUtc: this.fromKstToUtc(startKst),
-      endUtc: this.fromKstToUtc(endKst),
+      startUtc: fromKstToUtc(startKst),
+      endUtc: fromKstToUtc(endKst),
     };
-  }
-
-  private formatKst(date: Date) {
-    const kst = this.toKstDate(date);
-    const year = kst.getFullYear();
-    const month = String(kst.getMonth() + 1).padStart(2, '0');
-    const day = String(kst.getDate()).padStart(2, '0');
-    const hours = String(kst.getHours()).padStart(2, '0');
-    const minutes = String(kst.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day} ${hours}:${minutes} (KST)`;
   }
 
   private escapeHtml(text: string) {

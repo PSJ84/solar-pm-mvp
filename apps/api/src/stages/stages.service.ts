@@ -1,8 +1,9 @@
 // apps/api/src/stages/stages.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateStageDatesDto } from './dto/update-stage-dates.dto';
 import { UpdateStageActiveDto } from './dto/update-stage-active.dto';
+import { parseDateInputToUtc } from '../common/date-kst';
 
 @Injectable()
 export class StagesService {
@@ -11,7 +12,11 @@ export class StagesService {
   private parseDateValue(value?: string | null) {
     if (value === undefined) return undefined;
     if (value === null || value === '') return null;
-    return new Date(value);
+    try {
+      return parseDateInputToUtc(value, 'stageDate');
+    } catch (error) {
+      throw new BadRequestException('유효하지 않은 날짜 형식입니다.');
+    }
   }
 
   async findOne(id: string) {

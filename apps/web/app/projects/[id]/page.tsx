@@ -60,6 +60,8 @@ const calculateTaskStats = (stages?: ProjectStage[] | DerivedStage[]) => {
   return { totalTasks, completedTasks: completedTasks.length, progress };
 };
 
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
 const recalcProjectData = (project: Project, stages: ProjectStage[] = []) => {
   const stagesWithDerived: DerivedStage[] = stages.map((stage) => ({
     ...stage,
@@ -81,15 +83,27 @@ const normalizeDateInput = (value?: string | null) => {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toISOString().slice(0, 10);
+  const kstDate = new Date(date.getTime() + KST_OFFSET_MS);
+  return kstDate.toISOString().slice(0, 10);
 };
 
 const normalizeDateTimeInput = (value?: string | null) => {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  const localDateTime = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
-  return localDateTime.toISOString().slice(0, 16);
+  const kstDateTime = new Date(date.getTime() + KST_OFFSET_MS);
+  return kstDateTime.toISOString().slice(0, 16);
+};
+
+const toUtcIsoFromKstDateTime = (value: string) => {
+  const [datePart, timePart] = value.split('T');
+  if (!datePart || !timePart) return value;
+
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute] = timePart.split(':').map(Number);
+
+  const utcMs = Date.UTC(year, month - 1, day, hour, minute) - KST_OFFSET_MS;
+  return new Date(utcMs).toISOString();
 };
 
 const isLongMemo = (value?: string | null) => {
@@ -696,11 +710,20 @@ export default function ProjectDetailPage() {
   ) => {
     if (!task?.id || !activeStage?.id) return;
 
+    let nextValue: string | null;
+    if (!value) {
+      nextValue = null;
+    } else if (field === 'dueDate') {
+      nextValue = toUtcIsoFromKstDateTime(value);
+    } else {
+      nextValue = value;
+    }
+
     updateTaskFields({
       taskId: task.id,
       stageId: activeStage.id,
       data: {
-        [field]: value ? new Date(value).toISOString() : null,
+        [field]: nextValue,
       },
     });
   };
