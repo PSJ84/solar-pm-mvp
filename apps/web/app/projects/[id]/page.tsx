@@ -215,6 +215,26 @@ export default function ProjectDetailPage() {
     toastTimeoutRef.current = setTimeout(() => setToast(null), duration);
   };
 
+  const {
+    data: project,
+    isLoading: isProjectLoading,
+    isError: isProjectError,
+  } = useQuery<Project>({
+    queryKey: projectQueryKey,
+    queryFn: async () => {
+      const res = await projectsApi.getOne(projectId, { includeInactive: true });
+      return res.data;
+    },
+    enabled: hasProjectId,
+    staleTime: 15 * 1000,
+  });
+
+  const projectWithDerived = useMemo(() => {
+    if (!project) return null;
+
+    return recalcProjectData(project, project.stages || []);
+  }, [project]);
+
   useEffect(() => {
     return () => {
       if (toastTimeoutRef.current) {
@@ -224,38 +244,33 @@ export default function ProjectDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (!projectWithDerived) return;
+    if (!project) return;
 
     setProjectForm({
-      name: projectWithDerived.name || '',
-      address: projectWithDerived.address || '',
-      capacityKw: projectWithDerived.capacityKw ? String(projectWithDerived.capacityKw) : '',
-      targetDate: normalizeDateInput(projectWithDerived.targetDate || ''),
-      permitNumber: projectWithDerived.permitNumber || '',
-      inspectionDate: normalizeDateInput(projectWithDerived.inspectionDate || ''),
-      constructionStartAt: normalizeDateInput(projectWithDerived.constructionStartAt || ''),
-      externalId: projectWithDerived.externalId || '',
-      sitePassword: projectWithDerived.sitePassword || '',
-      siteAccessCode: projectWithDerived.siteAccessCode || '',
-      siteNote: projectWithDerived.siteNote || '',
-      businessLicenseNo: projectWithDerived.businessLicenseNo || '',
-      devPermitNo: projectWithDerived.devPermitNo || '',
-      kepcoReceiptNo: projectWithDerived.kepcoReceiptNo || '',
-      farmlandPermitNo: projectWithDerived.farmlandPermitNo || '',
-      landAddress: projectWithDerived.landAddress || '',
-      landOwner: projectWithDerived.landOwner || '',
+      name: project.name || '',
+      address: project.address || '',
+      capacityKw: project.capacityKw ? String(project.capacityKw) : '',
+      targetDate: normalizeDateInput(project.targetDate || ''),
+      permitNumber: project.permitNumber || '',
+      inspectionDate: normalizeDateInput(project.inspectionDate || ''),
+      constructionStartAt: normalizeDateInput(project.constructionStartAt || ''),
+      externalId: project.externalId || '',
+      sitePassword: project.sitePassword || '',
+      siteAccessCode: project.siteAccessCode || '',
+      siteNote: project.siteNote || '',
+      businessLicenseNo: project.businessLicenseNo || '',
+      devPermitNo: project.devPermitNo || '',
+      kepcoReceiptNo: project.kepcoReceiptNo || '',
+      farmlandPermitNo: project.farmlandPermitNo || '',
+      landAddress: project.landAddress || '',
+      landOwner: project.landOwner || '',
       landLeaseRate:
-        projectWithDerived.landLeaseRate !== null && projectWithDerived.landLeaseRate !== undefined
-          ? String(projectWithDerived.landLeaseRate)
-          : '',
-      ppaPrice:
-        projectWithDerived.ppaPrice !== null && projectWithDerived.ppaPrice !== undefined
-          ? String(projectWithDerived.ppaPrice)
-          : '',
+        project.landLeaseRate !== null && project.landLeaseRate !== undefined ? String(project.landLeaseRate) : '',
+      ppaPrice: project.ppaPrice !== null && project.ppaPrice !== undefined ? String(project.ppaPrice) : '',
     });
 
     const vendorMap: Partial<Record<VendorRole, { vendorId: string; contactName: string; contactPhone: string; memo: string }>> = {};
-    (projectWithDerived.projectVendors || []).forEach((pv: ProjectVendor) => {
+    (project.projectVendors || []).forEach((pv: ProjectVendor) => {
       vendorMap[pv.role] = {
         vendorId: pv.vendor?.id || '',
         contactName: pv.contactName || '',
@@ -264,7 +279,7 @@ export default function ProjectDetailPage() {
       };
     });
     setProjectVendorForm(vendorMap);
-  }, [projectWithDerived]);
+  }, [project]);
 
   useEffect(() => {
     if (activeTab !== 'stages') {
@@ -289,26 +304,6 @@ export default function ProjectDetailPage() {
       return recalcProjectData(prev, updatedStages);
     });
   };
-
-  const {
-    data: project,
-    isLoading: isProjectLoading,
-    isError: isProjectError,
-  } = useQuery<Project>({
-    queryKey: projectQueryKey,
-    queryFn: async () => {
-      const res = await projectsApi.getOne(projectId, { includeInactive: true });
-      return res.data;
-    },
-    enabled: hasProjectId,
-    staleTime: 15 * 1000,
-  });
-
-  const projectWithDerived = useMemo(() => {
-    if (!project) return null;
-
-    return recalcProjectData(project, project.stages || []);
-  }, [project]);
 
   useEffect(() => {
     if (!initialTaskId || !projectWithDerived?.stages) return;
