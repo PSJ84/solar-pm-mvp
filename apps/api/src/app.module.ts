@@ -13,6 +13,7 @@ import { StagesModule } from './stages/stages.module';
 import { TemplatesModule } from './templates/templates.module';
 import { ChecklistModule } from './checklist/checklist.module';
 import { HealthModule } from './health/health.module';
+import { VendorsModule } from './vendors/vendors.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { HealthModule } from './health/health.module';
     TemplatesModule,
     ChecklistModule,
     HealthModule,
+    VendorsModule,
   ],
 })
 export class AppModule {}

@@ -11,11 +11,13 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
+import { VendorRole } from '@prisma/client';
 import { Request } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto, UpdateProjectDto, CloneProjectResponseDto } from './dto/project.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { UpsertProjectVendorDto } from './dto/project-vendor.dto';
 
 @ApiTags('Projects')
 @ApiBearerAuth()
@@ -59,6 +61,41 @@ export class ProjectsController {
     const includeInactiveFlag = includeInactive === 'true';
 
     return this.projectsService.findOne(id, companyId, includeInactiveFlag);
+  }
+
+  @Get(':id/vendors')
+  @ApiOperation({ summary: '프로젝트에 연결된 업체 조회' })
+  async getProjectVendors(@Param('id') id: string, @Req() req: Request) {
+    const user: any = (req as any).user;
+    const companyId = user?.companyId;
+
+    return this.projectsService.getProjectVendors(id, companyId);
+  }
+
+  @Post(':id/vendors')
+  @ApiOperation({ summary: '프로젝트-업체 매핑 추가/수정' })
+  async upsertProjectVendor(
+    @Param('id') id: string,
+    @Body() body: UpsertProjectVendorDto,
+    @Req() req: Request,
+  ) {
+    const user: any = (req as any).user;
+    const companyId = user?.companyId;
+
+    return this.projectsService.upsertProjectVendor(id, body, companyId);
+  }
+
+  @Delete(':id/vendors/:role')
+  @ApiOperation({ summary: '프로젝트-업체 매핑 제거 (Soft delete)' })
+  async removeProjectVendor(
+    @Param('id') id: string,
+    @Param('role') role: VendorRole,
+    @Req() req: Request,
+  ) {
+    const user: any = (req as any).user;
+    const companyId = user?.companyId;
+
+    return this.projectsService.removeProjectVendor(id, role, companyId);
   }
 
   @Patch(':id')
