@@ -1,10 +1,35 @@
+import { existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { URL, fileURLToPath } from 'node:url';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(currentDir, '..', '..', '..');
-const schemaPath = path.resolve(repoRoot, 'packages/prisma/schema.prisma');
+
+function findSchemaPath() {
+  const visited = [];
+  const starts = [currentDir];
+  if (process.cwd() !== currentDir) starts.push(process.cwd());
+
+  for (const start of starts) {
+    let candidateRoot = start;
+    let depth = 0;
+
+    while (candidateRoot && depth < 8) {
+      const candidate = path.resolve(candidateRoot, 'packages/prisma/schema.prisma');
+      visited.push(candidate);
+      if (existsSync(candidate)) {
+        return { schemaPath: candidate, visited };
+      }
+
+      const parent = path.dirname(candidateRoot);
+      if (parent === candidateRoot) break;
+      candidateRoot = parent;
+      depth += 1;
+    }
+  }
+
+  return { schemaPath: null, visited };
+}
 
 function maskDatabaseUrl(raw) {
   if (!raw) return 'DATABASE_URL not set';
@@ -36,9 +61,9 @@ function deriveSupabaseDirectUrl(databaseUrl) {
   }
 }
 
-function runCommand(cmd, env) {
+function runCommand(cmd, env, cwd) {
   console.log(`[Prisma] Running: ${cmd}`);
-  execSync(cmd, { stdio: 'inherit', env });
+  execSync(cmd, { stdio: 'inherit', env, cwd });
 }
 
 function prepareEnv() {
@@ -67,15 +92,43 @@ function prepareEnv() {
 }
 
 function main() {
-  const env = prepareEnv();
-  console.log(`[Prisma] Using schema at: ${schemaPath}`);
-  const migrateCmd = `pnpm --filter @solar-pm/prisma prisma migrate deploy --schema ${schemaPath}`;
-  const statusCmd = `pnpm --filter @solar-pm/prisma prisma migrate status --schema ${schemaPath}`;
-  const generateCmd = `pnpm --filter @solar-pm/prisma prisma generate --schema ${schemaPath}`;
+  const { schemaPath, visited } = findSchemaPath();
+  if (!schemaPath) {
+    console.error('[Prisma] Failed to locate schema.prisma. Checked paths:');
+    visited.forEach((candidate) => console.error(` - ${candidate}`));
+    process.exit(1);
+  }
 
-  runCommand(generateCmd, env);
-  runCommand(migrateCmd, env);
-  runCommand(statusCmd, env);
+  const env = prepareEnv();
+  const schemaDir = path.dirname(schemaPath);
+  console.log(`[Prisma] Using schema at: ${schemaPath}`);
+  console.log(`[Prisma] process.cwd(): ${process.cwd()}`);
+  console.log(`[Prisma] currentDir: ${currentDir}`);
+  console.log(`[Prisma] schema directory (cwd for Prisma CLI): ${schemaDir}`);
+  const migrateCmd = `pnpm --dir ${schemaDir} exec prisma migrate deploy --schema ${schemaPath}`;
+  const statusCmd = `pnpm --dir ${schemaDir} exec prisma migrate status --schema ${schemaPath}`;
+  const generateCmd = `pnpm --dir ${schemaDir} exec prisma generate --schema ${schemaPath}`;
+
+  runCommand(generateCmd, env, schemaDir);
+
+  let effectiveEnv = env;
+  try {
+    runCommand(migrateCmd, env, schemaDir);
+  } catch (error) {
+    const usingDerivedDirect = env.DIRECT_URL && env.DIRECT_URL !== env.DATABASE_URL;
+    const isP1001 = error?.message?.includes('P1001');
+
+    if (usingDerivedDirect && isP1001) {
+      const fallbackEnv = { ...env, DIRECT_URL: env.DATABASE_URL };
+      console.warn('[Prisma] migrate deploy failed with DIRECT_URL; retrying with DATABASE_URL as DIRECT_URL (pooler).');
+      runCommand(migrateCmd, fallbackEnv, schemaDir);
+      effectiveEnv = fallbackEnv;
+    } else {
+      throw error;
+    }
+  }
+
+  runCommand(statusCmd, effectiveEnv, schemaDir);
 }
 
 main();
