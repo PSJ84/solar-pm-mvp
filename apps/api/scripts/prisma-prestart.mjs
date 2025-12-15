@@ -7,20 +7,25 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 function findSchemaPath() {
   const visited = [];
-  let candidateRoot = currentDir;
-  let depth = 0;
+  const starts = [currentDir];
+  if (process.cwd() !== currentDir) starts.push(process.cwd());
 
-  while (candidateRoot && depth < 8) {
-    const candidate = path.resolve(candidateRoot, 'packages/prisma/schema.prisma');
-    visited.push(candidate);
-    if (existsSync(candidate)) {
-      return { schemaPath: candidate, visited };
+  for (const start of starts) {
+    let candidateRoot = start;
+    let depth = 0;
+
+    while (candidateRoot && depth < 8) {
+      const candidate = path.resolve(candidateRoot, 'packages/prisma/schema.prisma');
+      visited.push(candidate);
+      if (existsSync(candidate)) {
+        return { schemaPath: candidate, visited };
+      }
+
+      const parent = path.dirname(candidateRoot);
+      if (parent === candidateRoot) break;
+      candidateRoot = parent;
+      depth += 1;
     }
-
-    const parent = path.dirname(candidateRoot);
-    if (parent === candidateRoot) break;
-    candidateRoot = parent;
-    depth += 1;
   }
 
   return { schemaPath: null, visited };
