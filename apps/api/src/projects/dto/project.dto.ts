@@ -50,6 +50,61 @@ export class CreateProjectDto {
   @IsString()
   externalId?: string;
 
+  @ApiPropertyOptional({ description: '현장 비밀번호' })
+  @IsOptional()
+  @IsString()
+  sitePassword?: string;
+
+  @ApiPropertyOptional({ description: '현장 출입 코드' })
+  @IsOptional()
+  @IsString()
+  siteAccessCode?: string;
+
+  @ApiPropertyOptional({ description: '현장 비고' })
+  @IsOptional()
+  @IsString()
+  siteNote?: string;
+
+  @ApiPropertyOptional({ description: '사업자등록번호' })
+  @IsOptional()
+  @IsString()
+  businessLicenseNo?: string;
+
+  @ApiPropertyOptional({ description: '개발행위허가 번호' })
+  @IsOptional()
+  @IsString()
+  devPermitNo?: string;
+
+  @ApiPropertyOptional({ description: '한전 접수번호' })
+  @IsOptional()
+  @IsString()
+  kepcoReceiptNo?: string;
+
+  @ApiPropertyOptional({ description: '농지 전용허가 번호' })
+  @IsOptional()
+  @IsString()
+  farmlandPermitNo?: string;
+
+  @ApiPropertyOptional({ description: '토지 주소' })
+  @IsOptional()
+  @IsString()
+  landAddress?: string;
+
+  @ApiPropertyOptional({ description: '토지 소유주' })
+  @IsOptional()
+  @IsString()
+  landOwner?: string;
+
+  @ApiPropertyOptional({ description: '토지 임대료', type: Number })
+  @IsOptional()
+  @IsNumber()
+  landLeaseRate?: number;
+
+  @ApiPropertyOptional({ description: 'PPA 단가', type: Number })
+  @IsOptional()
+  @IsNumber()
+  ppaPrice?: number;
+
   @ApiPropertyOptional({ type: [String], description: '태그 (예: ["영농형", "임대"])' })
   @IsOptional()
   @IsArray()
@@ -103,6 +158,61 @@ export class UpdateProjectDto {
   @IsOptional()
   @IsString()
   externalId?: string;
+
+  @ApiPropertyOptional({ description: '현장 비밀번호' })
+  @IsOptional()
+  @IsString()
+  sitePassword?: string;
+
+  @ApiPropertyOptional({ description: '현장 출입 코드' })
+  @IsOptional()
+  @IsString()
+  siteAccessCode?: string;
+
+  @ApiPropertyOptional({ description: '현장 비고' })
+  @IsOptional()
+  @IsString()
+  siteNote?: string;
+
+  @ApiPropertyOptional({ description: '사업자등록번호' })
+  @IsOptional()
+  @IsString()
+  businessLicenseNo?: string;
+
+  @ApiPropertyOptional({ description: '개발행위허가 번호' })
+  @IsOptional()
+  @IsString()
+  devPermitNo?: string;
+
+  @ApiPropertyOptional({ description: '한전 접수번호' })
+  @IsOptional()
+  @IsString()
+  kepcoReceiptNo?: string;
+
+  @ApiPropertyOptional({ description: '농지 전용허가 번호' })
+  @IsOptional()
+  @IsString()
+  farmlandPermitNo?: string;
+
+  @ApiPropertyOptional({ description: '토지 주소' })
+  @IsOptional()
+  @IsString()
+  landAddress?: string;
+
+  @ApiPropertyOptional({ description: '토지 소유주' })
+  @IsOptional()
+  @IsString()
+  landOwner?: string;
+
+  @ApiPropertyOptional({ description: '토지 임대료', type: Number })
+  @IsOptional()
+  @IsNumber()
+  landLeaseRate?: number;
+
+  @ApiPropertyOptional({ description: 'PPA 단가', type: Number })
+  @IsOptional()
+  @IsNumber()
+  ppaPrice?: number;
 
   @ApiPropertyOptional({ type: [String], description: '태그' })
   @IsOptional()
