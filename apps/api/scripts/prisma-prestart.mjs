@@ -61,9 +61,9 @@ function deriveSupabaseDirectUrl(databaseUrl) {
   }
 }
 
-function runCommand(cmd, env) {
+function runCommand(cmd, env, cwd) {
   console.log(`[Prisma] Running: ${cmd}`);
-  execSync(cmd, { stdio: 'inherit', env });
+  execSync(cmd, { stdio: 'inherit', env, cwd });
 }
 
 function prepareEnv() {
@@ -100,16 +100,18 @@ function main() {
   }
 
   const env = prepareEnv();
+  const workspaceRoot = path.resolve(schemaPath, '..', '..', '..');
   console.log(`[Prisma] Using schema at: ${schemaPath}`);
   console.log(`[Prisma] process.cwd(): ${process.cwd()}`);
   console.log(`[Prisma] currentDir: ${currentDir}`);
+  console.log(`[Prisma] workspace root for pnpm commands: ${workspaceRoot}`);
   const migrateCmd = `pnpm --filter @solar-pm/prisma prisma migrate deploy --schema ${schemaPath}`;
   const statusCmd = `pnpm --filter @solar-pm/prisma prisma migrate status --schema ${schemaPath}`;
   const generateCmd = `pnpm --filter @solar-pm/prisma prisma generate --schema ${schemaPath}`;
 
-  runCommand(generateCmd, env);
-  runCommand(migrateCmd, env);
-  runCommand(statusCmd, env);
+  runCommand(generateCmd, env, workspaceRoot);
+  runCommand(migrateCmd, env, workspaceRoot);
+  runCommand(statusCmd, env, workspaceRoot);
 }
 
 main();
