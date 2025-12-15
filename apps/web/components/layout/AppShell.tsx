@@ -17,6 +17,7 @@ const navItems = [
   { href: '/dashboard', label: '대시보드', icon: LayoutDashboard },
   { href: '/projects', label: '프로젝트', icon: FolderKanban },
   { href: '/templates', label: '템플릿', icon: FileText },
+  { href: '/settings/vendors', label: '설정', icon: Settings },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -62,7 +63,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" />
               </Link>
               <Link
-                href="/settings"
+                href="/settings/vendors"
                 className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg"
               >
                 <Settings className="h-5 w-5" />
@@ -78,7 +79,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 md:pb-8">{children}</main>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 md:hidden">
-        <div className="grid grid-cols-3 max-w-3xl mx-auto">
+        <div className="grid grid-cols-4 max-w-3xl mx-auto">
           {navItems.map((item) => {
             const isActive = pathname?.startsWith(item.href);
 
