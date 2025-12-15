@@ -110,8 +110,25 @@ function main() {
   const generateCmd = `pnpm --dir ${schemaDir} exec prisma generate --schema ${schemaPath}`;
 
   runCommand(generateCmd, env, schemaDir);
-  runCommand(migrateCmd, env, schemaDir);
-  runCommand(statusCmd, env, schemaDir);
+
+  let effectiveEnv = env;
+  try {
+    runCommand(migrateCmd, env, schemaDir);
+  } catch (error) {
+    const usingDerivedDirect = env.DIRECT_URL && env.DIRECT_URL !== env.DATABASE_URL;
+    const isP1001 = error?.message?.includes('P1001');
+
+    if (usingDerivedDirect && isP1001) {
+      const fallbackEnv = { ...env, DIRECT_URL: env.DATABASE_URL };
+      console.warn('[Prisma] migrate deploy failed with DIRECT_URL; retrying with DATABASE_URL as DIRECT_URL (pooler).');
+      runCommand(migrateCmd, fallbackEnv, schemaDir);
+      effectiveEnv = fallbackEnv;
+    } else {
+      throw error;
+    }
+  }
+
+  runCommand(statusCmd, effectiveEnv, schemaDir);
 }
 
 main();
