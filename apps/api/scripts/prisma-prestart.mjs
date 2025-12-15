@@ -3,7 +3,7 @@ import path from 'node:path';
 import { URL, fileURLToPath } from 'node:url';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(currentDir, '..', '..');
+const repoRoot = path.resolve(currentDir, '..', '..', '..');
 const schemaPath = path.resolve(repoRoot, 'packages/prisma/schema.prisma');
 
 function maskDatabaseUrl(raw) {
@@ -68,6 +68,7 @@ function prepareEnv() {
 
 function main() {
   const env = prepareEnv();
+  console.log(`[Prisma] Using schema at: ${schemaPath}`);
   const migrateCmd = `pnpm --filter @solar-pm/prisma prisma migrate deploy --schema ${schemaPath}`;
   const statusCmd = `pnpm --filter @solar-pm/prisma prisma migrate status --schema ${schemaPath}`;
   const generateCmd = `pnpm --filter @solar-pm/prisma prisma generate --schema ${schemaPath}`;

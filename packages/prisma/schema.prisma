@@ -106,7 +106,24 @@ model Project {
   permitNumber        String?    // 발전사업허가 번호
   inspectionDate      DateTime?  // 사용전검사 예정일 (D-14 패키지 트리거)
   constructionStartAt DateTime?  // 착공일 (착공 전 필수체크 강제용)
-  
+
+  // 현장 접근 정보
+  sitePassword   String?
+  siteAccessCode String?
+  siteNote       String?   @db.Text
+
+  // 인허가/접수 정보
+  businessLicenseNo String?
+  devPermitNo       String?
+  kepcoReceiptNo    String?
+  farmlandPermitNo  String?
+
+  // 토지/계약 정보
+  landAddress   String?
+  landOwner     String?
+  landLeaseRate Decimal?  @db.Decimal(12, 2)
+  ppaPrice      Decimal?  @db.Decimal(12, 2)
+
   // [v1.1] 공통 필드
   externalId      String?        // 외부 시스템 연동용 (한전 사업번호, 허가번호 등)
   tags            String[]  @default([]) // ["영농형", "지붕형", "수상", "임대", "자가"] 등
@@ -117,6 +134,7 @@ model Project {
   documents       Document[]
   shareLinks      ShareLink[]    // MVP #9: 외부 공유
   riskScores      DelayRiskScore[] // MVP #25: 지연 위험
+  projectVendors  ProjectVendor[]
   
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -545,4 +563,62 @@ model DelayRiskScore {
   @@index([severity])
   @@index([calculatedAt])
   @@map("delay_risk_scores")
+}
+
+// ===========================================
+// Vendor 관리
+// ===========================================
+
+enum VendorRole {
+  structure
+  electrical
+  electrical_design
+  structural_review
+  epc
+  om
+  finance
+  other
+}
+
+model Vendor {
+  id           String   @id @default(cuid())
+  name         String
+  contact      String?
+  bizNo        String?
+  bankAccount  String?
+  address      String?
+  memo         String?  @db.Text
+
+  deletedAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  projectVendors ProjectVendor[]
+
+  @@index([deletedAt])
+  @@map("vendors")
+}
+
+model ProjectVendor {
+  id          String     @id @default(cuid())
+  role        VendorRole
+  contactName String?
+  contactPhone String?
+  memo        String?    @db.Text
+
+  deletedAt   DateTime?
+
+  projectId   String
+  project     Project    @relation(fields: [projectId], references: [id])
+  vendorId    String
+  vendor      Vendor     @relation(fields: [vendorId], references: [id])
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([projectId, role])
+  @@index([projectId])
+  @@index([vendorId])
+  @@index([deletedAt])
+  @@map("project_vendors")
 }

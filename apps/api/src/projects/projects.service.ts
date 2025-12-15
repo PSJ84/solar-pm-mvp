@@ -1,11 +1,27 @@
 // apps/api/src/projects/projects.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, VendorRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto, UpdateProjectDto } from './dto/project.dto';
 
 @Injectable()
 export class ProjectsService {
   constructor(private prisma: PrismaService) {}
+
+  private async ensureProject(projectId: string, companyId?: string) {
+    const where: any = { id: projectId, deletedAt: null };
+    if (companyId) {
+      where.companyId = companyId;
+    }
+
+    const project = await this.prisma.project.findFirst({ where });
+
+    if (!project) {
+      throw new NotFoundException('프로젝트를 찾을 수 없습니다.');
+    }
+
+    return project;
+  }
 
   private buildTaskSelect(includeNotification: boolean) {
     return {
@@ -70,6 +86,18 @@ export class ProjectsService {
         inspectionDate: dto.inspectionDate ? new Date(dto.inspectionDate) : null,
         constructionStartAt: dto.constructionStartAt ? new Date(dto.constructionStartAt) : null,
         externalId: dto.externalId,
+        sitePassword: dto.sitePassword,
+        siteAccessCode: dto.siteAccessCode,
+        siteNote: dto.siteNote,
+        businessLicenseNo: dto.businessLicenseNo,
+        devPermitNo: dto.devPermitNo,
+        kepcoReceiptNo: dto.kepcoReceiptNo,
+        farmlandPermitNo: dto.farmlandPermitNo,
+        landAddress: dto.landAddress,
+        landOwner: dto.landOwner,
+        landLeaseRate:
+          dto.landLeaseRate !== undefined ? new Prisma.Decimal(dto.landLeaseRate) : undefined,
+        ppaPrice: dto.ppaPrice !== undefined ? new Prisma.Decimal(dto.ppaPrice) : undefined,
         tags: dto.tags || [],
         companyId: resolvedCompanyId,
       },
@@ -216,6 +244,10 @@ export class ProjectsService {
             OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
           },
         },
+        projectVendors: {
+          where: { deletedAt: null, vendor: { deletedAt: null } },
+          include: { vendor: true },
+        },
       },
     });
 
@@ -232,11 +264,33 @@ export class ProjectsService {
     const progress =
       allTasks.length > 0 ? Math.round((completedTasks.length / allTasks.length) * 100) : 0;
 
+    const projectVendors =
+      project.projectVendors?.map((pv) => ({
+        id: pv.id,
+        role: pv.role,
+        contactName: pv.contactName,
+        contactPhone: pv.contactPhone,
+        memo: pv.memo,
+        vendor: pv.vendor
+          ? {
+              id: pv.vendor.id,
+              name: pv.vendor.name,
+              contact: pv.vendor.contact,
+              bizNo: pv.vendor.bizNo,
+              bankAccount: pv.vendor.bankAccount,
+              address: pv.vendor.address,
+            }
+          : null,
+      })) || [];
+
     return {
       ...project,
       progress,
       totalTasks: allTasks.length,
       completedTasks: completedTasks.length,
+      landLeaseRate: project.landLeaseRate ? Number(project.landLeaseRate) : null,
+      ppaPrice: project.ppaPrice ? Number(project.ppaPrice) : null,
+      projectVendors,
     };
   }
 
@@ -262,8 +316,94 @@ export class ProjectsService {
           ? new Date(dto.constructionStartAt)
           : undefined,
         externalId: dto.externalId,
+        sitePassword: dto.sitePassword,
+        siteAccessCode: dto.siteAccessCode,
+        siteNote: dto.siteNote,
+        businessLicenseNo: dto.businessLicenseNo,
+        devPermitNo: dto.devPermitNo,
+        kepcoReceiptNo: dto.kepcoReceiptNo,
+        farmlandPermitNo: dto.farmlandPermitNo,
+        landAddress: dto.landAddress,
+        landOwner: dto.landOwner,
+        landLeaseRate:
+          dto.landLeaseRate !== undefined ? new Prisma.Decimal(dto.landLeaseRate) : undefined,
+        ppaPrice: dto.ppaPrice !== undefined ? new Prisma.Decimal(dto.ppaPrice) : undefined,
         tags: dto.tags,
       },
+    });
+  }
+
+  async getProjectVendors(projectId: string, companyId?: string) {
+    await this.ensureProject(projectId, companyId);
+
+    return this.prisma.projectVendor.findMany({
+      where: { projectId, deletedAt: null, vendor: { deletedAt: null } },
+      include: { vendor: true },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async upsertProjectVendor(
+    projectId: string,
+    payload: {
+      role: VendorRole;
+      vendorId: string;
+      contactName?: string;
+      contactPhone?: string;
+      memo?: string;
+    },
+    companyId?: string,
+  ) {
+    await this.ensureProject(projectId, companyId);
+
+    const vendor = await this.prisma.vendor.findFirst({
+      where: { id: payload.vendorId, deletedAt: null },
+    });
+
+    if (!vendor) {
+      throw new NotFoundException('업체를 찾을 수 없습니다.');
+    }
+
+    return this.prisma.projectVendor.upsert({
+      where: {
+        projectId_role: {
+          projectId,
+          role: payload.role,
+        },
+      },
+      update: {
+        vendorId: payload.vendorId,
+        contactName: payload.contactName,
+        contactPhone: payload.contactPhone,
+        memo: payload.memo,
+        deletedAt: null,
+      },
+      create: {
+        projectId,
+        vendorId: payload.vendorId,
+        role: payload.role,
+        contactName: payload.contactName,
+        contactPhone: payload.contactPhone,
+        memo: payload.memo,
+      },
+      include: { vendor: true },
+    });
+  }
+
+  async removeProjectVendor(projectId: string, role: VendorRole, companyId?: string) {
+    await this.ensureProject(projectId, companyId);
+
+    const projectVendor = await this.prisma.projectVendor.findFirst({
+      where: { projectId, role, deletedAt: null },
+    });
+
+    if (!projectVendor) {
+      throw new NotFoundException('연결된 업체가 없습니다.');
+    }
+
+    return this.prisma.projectVendor.update({
+      where: { id: projectVendor.id },
+      data: { deletedAt: new Date() },
     });
   }
 

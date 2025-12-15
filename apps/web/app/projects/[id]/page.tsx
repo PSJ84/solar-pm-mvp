@@ -20,18 +20,32 @@ import {
   EyeOff,
   PanelLeftOpen,
   X,
+  Save,
+  Info,
+  Users,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn, STATUS_LABELS, formatRelativeTime, getProgressColor } from '@/lib/utils';
-import { projectsApi, stagesApi, tasksApi, templatesApi } from '@/lib/api';
+import { projectsApi, stagesApi, tasksApi, templatesApi, vendorsApi } from '@/lib/api';
 import { ChecklistPanel } from '@/components/checklist/ChecklistPanel';
 import { AddTaskModal } from '@/components/tasks/AddTaskModal';
-import type { Project, ProjectStage, Task, TaskHistory, TaskStatus } from '@/types';
+import type { Project, ProjectStage, ProjectVendor, Task, TaskHistory, TaskStatus, Vendor, VendorRole } from '@/types';
 import type { TemplateListItemDto } from '../../../../../packages/shared/src/types/template.types';
 
 type DerivedStage = ProjectStage & { derivedStatus: string };
 
 type StageDateField = 'startDate' | 'receivedDate' | 'completedDate';
+
+const VENDOR_ROLES: { value: VendorRole; label: string }[] = [
+  { value: 'structure', label: '구조' },
+  { value: 'electrical', label: '전기' },
+  { value: 'electrical_design', label: '전기설계' },
+  { value: 'structural_review', label: '구조 검토' },
+  { value: 'epc', label: 'EPC' },
+  { value: 'om', label: '유지보수' },
+  { value: 'finance', label: '금융' },
+  { value: 'other', label: '기타' },
+];
 
 const deriveStageStatus = (stage: ProjectStage): string => {
   if (stage.isActive === false) return 'inactive';
@@ -149,6 +163,33 @@ export default function ProjectDetailPage() {
   const hasInitializedFromUrlRef = useRef(false);
   const [isAddStageModalOpen, setIsAddStageModalOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [activeTab, setActiveTab] = useState<'stages' | 'info' | 'vendors'>('stages');
+  const [projectForm, setProjectForm] = useState({
+    name: '',
+    address: '',
+    capacityKw: '',
+    targetDate: '',
+    permitNumber: '',
+    inspectionDate: '',
+    constructionStartAt: '',
+    externalId: '',
+    sitePassword: '',
+    siteAccessCode: '',
+    siteNote: '',
+    businessLicenseNo: '',
+    devPermitNo: '',
+    kepcoReceiptNo: '',
+    farmlandPermitNo: '',
+    landAddress: '',
+    landOwner: '',
+    landLeaseRate: '',
+    ppaPrice: '',
+  });
+  const [projectVendorForm, setProjectVendorForm] = useState<
+    Partial<Record<VendorRole, { vendorId: string; contactName: string; contactPhone: string; memo: string }>>
+  >({});
+  const [infoError, setInfoError] = useState<string | null>(null);
+  const [vendorError, setVendorError] = useState<string | null>(null);
 
   const projectQueryKey = useMemo(() => ['project', projectId], [projectId]);
   const activityQueryKey = useMemo(
@@ -174,32 +215,6 @@ export default function ProjectDetailPage() {
     toastTimeoutRef.current = setTimeout(() => setToast(null), duration);
   };
 
-  useEffect(() => {
-    return () => {
-      if (toastTimeoutRef.current) {
-        clearTimeout(toastTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const updateStageTasksInCache = (stageId: string, updater: (tasks: Task[]) => Task[]) => {
-    queryClient.setQueryData<Project>(projectQueryKey, (prev) => {
-      if (!prev) return prev;
-
-      const updatedStages =
-        prev.stages?.map((stage) =>
-          stage.id === stageId
-            ? {
-                ...stage,
-                tasks: updater(stage.tasks || []),
-              }
-            : stage,
-        ) || [];
-
-      return recalcProjectData(prev, updatedStages);
-    });
-  };
-
   const {
     data: project,
     isLoading: isProjectLoading,
@@ -219,6 +234,76 @@ export default function ProjectDetailPage() {
 
     return recalcProjectData(project, project.stages || []);
   }, [project]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!project) return;
+
+    setProjectForm({
+      name: project.name || '',
+      address: project.address || '',
+      capacityKw: project.capacityKw ? String(project.capacityKw) : '',
+      targetDate: normalizeDateInput(project.targetDate || ''),
+      permitNumber: project.permitNumber || '',
+      inspectionDate: normalizeDateInput(project.inspectionDate || ''),
+      constructionStartAt: normalizeDateInput(project.constructionStartAt || ''),
+      externalId: project.externalId || '',
+      sitePassword: project.sitePassword || '',
+      siteAccessCode: project.siteAccessCode || '',
+      siteNote: project.siteNote || '',
+      businessLicenseNo: project.businessLicenseNo || '',
+      devPermitNo: project.devPermitNo || '',
+      kepcoReceiptNo: project.kepcoReceiptNo || '',
+      farmlandPermitNo: project.farmlandPermitNo || '',
+      landAddress: project.landAddress || '',
+      landOwner: project.landOwner || '',
+      landLeaseRate:
+        project.landLeaseRate !== null && project.landLeaseRate !== undefined ? String(project.landLeaseRate) : '',
+      ppaPrice: project.ppaPrice !== null && project.ppaPrice !== undefined ? String(project.ppaPrice) : '',
+    });
+
+    const vendorMap: Partial<Record<VendorRole, { vendorId: string; contactName: string; contactPhone: string; memo: string }>> = {};
+    (project.projectVendors || []).forEach((pv: ProjectVendor) => {
+      vendorMap[pv.role] = {
+        vendorId: pv.vendor?.id || '',
+        contactName: pv.contactName || '',
+        contactPhone: pv.contactPhone || '',
+        memo: pv.memo || '',
+      };
+    });
+    setProjectVendorForm(vendorMap);
+  }, [project]);
+
+  useEffect(() => {
+    if (activeTab !== 'stages') {
+      setIsStageDrawerOpen(false);
+    }
+  }, [activeTab]);
+
+  const updateStageTasksInCache = (stageId: string, updater: (tasks: Task[]) => Task[]) => {
+    queryClient.setQueryData<Project>(projectQueryKey, (prev) => {
+      if (!prev) return prev;
+
+      const updatedStages =
+        prev.stages?.map((stage) =>
+          stage.id === stageId
+            ? {
+                ...stage,
+                tasks: updater(stage.tasks || []),
+              }
+            : stage,
+        ) || [];
+
+      return recalcProjectData(prev, updatedStages);
+    });
+  };
 
   useEffect(() => {
     if (!initialTaskId || !projectWithDerived?.stages) return;
@@ -337,6 +422,54 @@ export default function ProjectDetailPage() {
       return res.data;
     },
     enabled: isAddStageModalOpen,
+  });
+
+  const { data: vendorOptions } = useQuery<Vendor[]>({
+    queryKey: ['vendors'],
+    queryFn: async () => {
+      const res = await vendorsApi.getAll();
+      return res.data;
+    },
+    staleTime: 30 * 1000,
+  });
+
+  const updateProjectMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      await projectsApi.update(projectId, payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectQueryKey });
+      showToast('프로젝트 정보를 저장했어요.', 'success');
+    },
+    onError: () => {
+      showToast('프로젝트 정보를 저장하지 못했습니다.', 'error');
+    },
+  });
+
+  const upsertProjectVendorMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      await projectsApi.upsertProjectVendor(projectId, payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectQueryKey });
+      showToast('협력업체 정보를 저장했어요.', 'success');
+    },
+    onError: () => {
+      showToast('협력업체 연결에 실패했습니다.', 'error');
+    },
+  });
+
+  const removeProjectVendorMutation = useMutation({
+    mutationFn: async (role: VendorRole) => {
+      await projectsApi.removeProjectVendor(projectId, role);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: projectQueryKey });
+      showToast('협력업체 연결을 해제했습니다.', 'success');
+    },
+    onError: () => {
+      showToast('협력업체 해제에 실패했습니다.', 'error');
+    },
   });
 
   const { mutate: updateTaskStatus, isPending: isUpdatingTask } = useMutation({
@@ -861,6 +994,404 @@ export default function ProjectDetailPage() {
     });
   };
 
+  const handleProjectFormChange = (field: string, value: string) => {
+    setProjectForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveProjectInfo = (e: React.FormEvent) => {
+    e.preventDefault();
+    setInfoError(null);
+
+    const capacityValue = projectForm.capacityKw !== '' ? Number(projectForm.capacityKw) : undefined;
+    const landLeaseValue = projectForm.landLeaseRate !== '' ? Number(projectForm.landLeaseRate) : undefined;
+    const ppaValue = projectForm.ppaPrice !== '' ? Number(projectForm.ppaPrice) : undefined;
+
+    if ([capacityValue, landLeaseValue, ppaValue].some((value) => value !== undefined && Number.isNaN(value))) {
+      setInfoError('숫자 입력값을 확인하세요.');
+      return;
+    }
+
+    updateProjectMutation.mutate({
+      name: projectForm.name,
+      address: projectForm.address || undefined,
+      capacityKw: capacityValue,
+      targetDate: projectForm.targetDate ? new Date(projectForm.targetDate).toISOString() : undefined,
+      permitNumber: projectForm.permitNumber || undefined,
+      inspectionDate: projectForm.inspectionDate
+        ? new Date(projectForm.inspectionDate).toISOString()
+        : undefined,
+      constructionStartAt: projectForm.constructionStartAt
+        ? new Date(projectForm.constructionStartAt).toISOString()
+        : undefined,
+      externalId: projectForm.externalId || undefined,
+      sitePassword: projectForm.sitePassword || undefined,
+      siteAccessCode: projectForm.siteAccessCode || undefined,
+      siteNote: projectForm.siteNote || undefined,
+      businessLicenseNo: projectForm.businessLicenseNo || undefined,
+      devPermitNo: projectForm.devPermitNo || undefined,
+      kepcoReceiptNo: projectForm.kepcoReceiptNo || undefined,
+      farmlandPermitNo: projectForm.farmlandPermitNo || undefined,
+      landAddress: projectForm.landAddress || undefined,
+      landOwner: projectForm.landOwner || undefined,
+      landLeaseRate: landLeaseValue,
+      ppaPrice: ppaValue,
+    });
+  };
+
+  const handleVendorFieldChange = (role: VendorRole, field: string, value: string) => {
+    setProjectVendorForm((prev) => ({
+      ...prev,
+      [role]: {
+        vendorId: prev[role]?.vendorId || '',
+        contactName: prev[role]?.contactName || '',
+        contactPhone: prev[role]?.contactPhone || '',
+        memo: prev[role]?.memo || '',
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleSaveVendor = (role: VendorRole) => {
+    const payload = projectVendorForm[role];
+    setVendorError(null);
+
+    if (!payload?.vendorId) {
+      setVendorError('업체를 선택하세요.');
+      return;
+    }
+
+    upsertProjectVendorMutation.mutate({
+      role,
+      vendorId: payload.vendorId,
+      contactName: payload.contactName || undefined,
+      contactPhone: payload.contactPhone || undefined,
+      memo: payload.memo || undefined,
+    });
+  };
+
+  const handleRemoveVendor = (role: VendorRole) => {
+    setVendorError(null);
+    removeProjectVendorMutation.mutate(role);
+  };
+
+  const renderProjectInfoTab = () => {
+    return (
+      <form onSubmit={handleSaveProjectInfo} className="space-y-4 pb-12">
+        {infoError && <div className="text-sm text-red-600">{infoError}</div>}
+
+        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <Info className="h-5 w-5 text-solar-500" />
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">기본 정보</h3>
+              <p className="text-sm text-slate-600">프로젝트의 기본 정보를 수정하세요.</p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">프로젝트명</span>
+              <input
+                type="text"
+                value={projectForm.name}
+                onChange={(e) => handleProjectFormChange('name', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+                required
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">주소</span>
+              <input
+                type="text"
+                value={projectForm.address}
+                onChange={(e) => handleProjectFormChange('address', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">발전용량 (kW)</span>
+              <input
+                type="number"
+                step="0.1"
+                value={projectForm.capacityKw}
+                onChange={(e) => handleProjectFormChange('capacityKw', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">목표 준공일</span>
+              <input
+                type="date"
+                value={projectForm.targetDate}
+                onChange={(e) => handleProjectFormChange('targetDate', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">외부 시스템 ID</span>
+              <input
+                type="text"
+                value={projectForm.externalId}
+                onChange={(e) => handleProjectFormChange('externalId', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">착공일</span>
+              <input
+                type="date"
+                value={projectForm.constructionStartAt}
+                onChange={(e) => handleProjectFormChange('constructionStartAt', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <Info className="h-5 w-5 text-solar-500" />
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">현장 접근/인허가</h3>
+              <p className="text-sm text-slate-600">현장 비밀번호와 인허가 정보를 보관하세요.</p>
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">현장 비밀번호</span>
+              <input
+                type="text"
+                value={projectForm.sitePassword}
+                onChange={(e) => handleProjectFormChange('sitePassword', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">출입 코드</span>
+              <input
+                type="text"
+                value={projectForm.siteAccessCode}
+                onChange={(e) => handleProjectFormChange('siteAccessCode', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700 md:col-span-2">
+              <span className="font-medium">현장 비고</span>
+              <textarea
+                value={projectForm.siteNote}
+                onChange={(e) => handleProjectFormChange('siteNote', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+                rows={3}
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">사업자등록번호</span>
+              <input
+                type="text"
+                value={projectForm.businessLicenseNo}
+                onChange={(e) => handleProjectFormChange('businessLicenseNo', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">개발행위허가 번호</span>
+              <input
+                type="text"
+                value={projectForm.devPermitNo}
+                onChange={(e) => handleProjectFormChange('devPermitNo', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">한전 접수번호</span>
+              <input
+                type="text"
+                value={projectForm.kepcoReceiptNo}
+                onChange={(e) => handleProjectFormChange('kepcoReceiptNo', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">농지 전용허가 번호</span>
+              <input
+                type="text"
+                value={projectForm.farmlandPermitNo}
+                onChange={(e) => handleProjectFormChange('farmlandPermitNo', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">사용전검사 예정일</span>
+              <input
+                type="date"
+                value={projectForm.inspectionDate}
+                onChange={(e) => handleProjectFormChange('inspectionDate', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <Info className="h-5 w-5 text-solar-500" />
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">토지/계약</h3>
+              <p className="text-sm text-slate-600">토지 소유와 단가 정보를 기록합니다.</p>
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">토지 주소</span>
+              <input
+                type="text"
+                value={projectForm.landAddress}
+                onChange={(e) => handleProjectFormChange('landAddress', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">토지 소유주</span>
+              <input
+                type="text"
+                value={projectForm.landOwner}
+                onChange={(e) => handleProjectFormChange('landOwner', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">임대료 (원)</span>
+              <input
+                type="number"
+                step="0.01"
+                value={projectForm.landLeaseRate}
+                onChange={(e) => handleProjectFormChange('landLeaseRate', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-700">
+              <span className="font-medium">PPA 단가 (원)</span>
+              <input
+                type="number"
+                step="0.01"
+                value={projectForm.ppaPrice}
+                onChange={(e) => handleProjectFormChange('ppaPrice', e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={updateProjectMutation.isPending}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-solar-500 text-white font-semibold rounded-lg hover:bg-solar-600 disabled:opacity-60"
+          >
+            <Save className="h-4 w-4" /> {updateProjectMutation.isPending ? '저장 중...' : '정보 저장'}
+          </button>
+        </div>
+      </form>
+    );
+  };
+
+  const renderVendorTab = () => {
+    const vendorList = vendorOptions || [];
+    return (
+      <div className="space-y-4 pb-16">
+        {vendorError && <div className="text-sm text-red-600">{vendorError}</div>}
+        <div className="grid gap-4">
+          {VENDOR_ROLES.map((role) => {
+            const vendorState =
+              projectVendorForm[role.value] || ({ vendorId: '', contactName: '', contactPhone: '', memo: '' } as const);
+
+            return (
+              <div key={role.value} className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-solar-500" />
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{role.label}</p>
+                      <p className="text-xs text-slate-500">역할별 협력업체를 선택하세요.</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveVendor(role.value)}
+                    disabled={!vendorState.vendorId || removeProjectVendorMutation.isPending}
+                    className="text-sm text-red-600 border border-red-100 px-3 py-1.5 rounded-lg hover:bg-red-50 disabled:opacity-50"
+                  >
+                    연결 해제
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="space-y-2 text-sm text-slate-700">
+                    <span className="font-medium">업체 선택</span>
+                    <select
+                      value={vendorState.vendorId}
+                      onChange={(e) => handleVendorFieldChange(role.value, 'vendorId', e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+                    >
+                      <option value="">업체를 선택하세요</option>
+                      {vendorList.map((vendor) => (
+                        <option key={vendor.id} value={vendor.id}>
+                          {vendor.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="space-y-2 text-sm text-slate-700">
+                      <span className="font-medium">담당자</span>
+                      <input
+                        type="text"
+                        value={vendorState.contactName}
+                        onChange={(e) => handleVendorFieldChange(role.value, 'contactName', e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+                      />
+                    </label>
+                    <label className="space-y-2 text-sm text-slate-700">
+                      <span className="font-medium">연락처</span>
+                      <input
+                        type="text"
+                        value={vendorState.contactPhone}
+                        onChange={(e) => handleVendorFieldChange(role.value, 'contactPhone', e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="space-y-2 text-sm text-slate-700">
+                    <span className="font-medium">메모</span>
+                    <textarea
+                      value={vendorState.memo}
+                      onChange={(e) => handleVendorFieldChange(role.value, 'memo', e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+                      rows={3}
+                    />
+                  </label>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => handleSaveVendor(role.value)}
+                      disabled={upsertProjectVendorMutation.isPending}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-solar-500 text-white font-semibold rounded-lg hover:bg-solar-600 disabled:opacity-60"
+                    >
+                      <Save className="h-4 w-4" /> 저장
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const isLoading = isProjectLoading && !projectWithDerived;
 
   if (isLoading) {
@@ -982,7 +1513,48 @@ export default function ProjectDetailPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="md:hidden mb-4 flex items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2 mb-6">
+          <button
+            type="button"
+            onClick={() => setActiveTab('stages')}
+            className={cn(
+              'px-4 py-2 text-sm font-semibold rounded-lg border',
+              activeTab === 'stages'
+                ? 'bg-solar-50 text-solar-700 border-solar-200'
+                : 'bg-white text-slate-700 border-slate-200',
+            )}
+          >
+            단계/태스크
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('info')}
+            className={cn(
+              'px-4 py-2 text-sm font-semibold rounded-lg border',
+              activeTab === 'info'
+                ? 'bg-solar-50 text-solar-700 border-solar-200'
+                : 'bg-white text-slate-700 border-slate-200',
+            )}
+          >
+            프로젝트 정보
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('vendors')}
+            className={cn(
+              'px-4 py-2 text-sm font-semibold rounded-lg border',
+              activeTab === 'vendors'
+                ? 'bg-solar-50 text-solar-700 border-solar-200'
+                : 'bg-white text-slate-700 border-slate-200',
+            )}
+          >
+            협력업체
+          </button>
+        </div>
+
+        {activeTab === 'stages' && (
+          <>
+            <div className="md:hidden mb-4 flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => setIsStageDrawerOpen(true)}
@@ -1448,12 +2020,18 @@ export default function ProjectDetailPage() {
                   <p className="text-sm text-slate-500">활동 로그가 없습니다.</p>
                 )}
               </div>
-              <button className="w-full mt-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors">
-                전체 활동 보기
-              </button>
-            </div>
-          </div>
+          <button className="w-full mt-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors">
+            전체 활동 보기
+          </button>
         </div>
+      </div>
+    </div>
+          </>
+        )}
+
+        {activeTab === 'info' && renderProjectInfoTab()}
+
+        {activeTab === 'vendors' && renderVendorTab()}
       </main>
 
       {addTaskModalStageId && projectId && (
