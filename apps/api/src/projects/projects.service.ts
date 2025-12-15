@@ -373,11 +373,36 @@ export class ProjectsService {
    * 프로젝트 삭제 (Soft delete)
    */
   async remove(id: string, companyId?: string) {
-    await this.findOne(id, companyId);
-    // [v1.1] Soft delete로 변경
-    return this.prisma.project.update({
-      where: { id },
-      data: { deletedAt: new Date() },
+    const where: any = { id };
+    if (companyId) {
+      where.companyId = companyId;
+    }
+
+    const project = await this.prisma.project.findFirst({ where });
+
+    if (!project) {
+      throw new NotFoundException('프로젝트를 찾을 수 없습니다.');
+    }
+
+    const deletedAt = project.deletedAt ?? new Date();
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedProject = await tx.project.update({
+        where: { id: project.id },
+        data: { deletedAt },
+      });
+
+      await tx.projectStage.updateMany({
+        where: { projectId: project.id, deletedAt: null },
+        data: { deletedAt, isActive: false },
+      });
+
+      await tx.task.updateMany({
+        where: { deletedAt: null, projectStage: { projectId: project.id } },
+        data: { deletedAt, isActive: false },
+      });
+
+      return updatedProject;
     });
   }
 
