@@ -158,6 +158,12 @@ export class TasksService {
     const where: Prisma.TaskWhereInput = {
       deletedAt: null,
       isActive: true,
+      projectStage: {
+        deletedAt: null,
+        project: {
+          deletedAt: null,
+        },
+      },
     };
 
     if (bucket === 'today') {
