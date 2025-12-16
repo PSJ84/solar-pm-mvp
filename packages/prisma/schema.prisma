@@ -75,6 +75,7 @@ model Company {
   users     User[]
   projects  Project[]
   templates StageTemplate[]
+  budgetCategories BudgetCategory[]
   
   // [v1.1] 공통 필드
   tags      String[]  @default([]) // 회사 분류: ["EPC", "시행사", "금융"] 등
@@ -135,6 +136,7 @@ model Project {
   shareLinks      ShareLink[]    // MVP #9: 외부 공유
   riskScores      DelayRiskScore[] // MVP #25: 지연 위험
   projectVendors  ProjectVendor[]
+  budgetItems     ProjectBudgetItem[]
   
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -569,6 +571,62 @@ model DelayRiskScore {
 // Vendor 관리
 // ===========================================
 
+// ===========================================
+// Budget 관리
+// ===========================================
+
+model BudgetCategory {
+  id          String      @id @default(cuid())
+  companyId   String
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name        String
+  vendorRole  VendorRole?
+  isDefault   Boolean     @default(false)
+  order       Int         @default(0)
+
+  deletedAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  budgetItems ProjectBudgetItem[]
+
+  @@unique([companyId, name])
+  @@index([companyId, order])
+  @@index([deletedAt])
+  @@index([isDefault])
+  @@map("budget_categories")
+}
+
+model ProjectBudgetItem {
+  id              String    @id @default(cuid())
+
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  categoryId      String
+  category        BudgetCategory @relation(fields: [categoryId], references: [id])
+
+  vendorOverrideId String?
+  vendorOverride   Vendor?   @relation(fields: [vendorOverrideId], references: [id])
+
+  contractAmount  Decimal   @default(0) @db.Decimal(14, 0)
+  plannedAmount   Decimal   @default(0) @db.Decimal(14, 0)
+  actualAmount    Decimal   @default(0) @db.Decimal(14, 0)
+
+  memo            String?
+
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([projectId, categoryId])
+  @@index([projectId])
+  @@index([categoryId])
+  @@index([deletedAt])
+  @@map("project_budget_items")
+}
+
 enum VendorRole {
   structure
   electrical
@@ -594,6 +652,7 @@ model Vendor {
   updatedAt    DateTime @updatedAt
 
   projectVendors ProjectVendor[]
+  budgetItemOverrides ProjectBudgetItem[]
 
   @@index([deletedAt])
   @@map("vendors")
