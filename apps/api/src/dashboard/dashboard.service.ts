@@ -160,10 +160,7 @@ export class DashboardService {
         AND: [baseWhere, tabWhere],
       },
       select: taskSelect,
-      orderBy: [
-        { dueDate: 'asc' },
-        { createdAt: 'asc' },
-      ],
+      orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
     });
 
     const mapped = tasks.map<MyWorkTaskDto>((task) => {
@@ -209,23 +206,24 @@ export class DashboardService {
 
   /**
    * [v1.1] 대시보드 통합 Summary API
-   * - 오늘 마감 태스크
-   * - 7일 내 마감 태스크
-   * - 30일 내 만료 예정 문서
-   * - 지연 위험 프로젝트
-   * - 통계 요약
    */
   async getFullSummary(userId?: string, companyId?: string): Promise<DashboardSummaryDto> {
     const resolvedCompanyId = await this.resolveCompanyId(companyId);
 
-    const [todayTasks, upcoming7Days, expiringDocuments, riskProjects, stats] =
+    const [todayTasks, upcoming7Days, expiringDocuments, riskProjects, statsBase] =
       await Promise.all([
         this.getTodayTasksForSummary(userId, resolvedCompanyId),
         this.getUpcoming7DaysTasksForSummary(userId, resolvedCompanyId),
         this.getExpiringDocumentsForSummary(resolvedCompanyId),
         this.getRiskProjectsForSummary(resolvedCompanyId),
-        this.getStatsForSummary(userId, resolvedCompanyId),
+        this.getStatsForSummary(userId, resolvedCompanyId), // ✅ 여기서 riskProjects 다시 계산 안 함
       ]);
+
+    const stats: DashboardSummaryDto['stats'] = {
+      ...statsBase,
+      // ✅ riskProjects는 이미 위에서 계산했으니 여기서만 카운트
+      riskProjectCount: riskProjects.filter((p) => p.riskScore >= 80).length,
+    };
 
     return {
       todayTasks,
@@ -236,9 +234,6 @@ export class DashboardService {
     };
   }
 
-  /**
-   * 오늘 마감 태스크 (Summary용)
-   */
   private async getTodayTasksForSummary(
     userId: string | undefined,
     companyId: string,
@@ -256,20 +251,12 @@ export class DashboardService {
         assigneeId: userId || undefined,
         deletedAt: null,
         isActive: true,
-        dueDate: {
-          gte: today,
-          lt: tomorrow,
-        },
-        status: {
-          not: 'completed',
-        },
+        dueDate: { gte: today, lt: tomorrow },
+        status: { not: 'completed' },
         projectStage: {
           deletedAt: null,
           isActive: true,
-          project: {
-            companyId,
-            deletedAt: null,
-          },
+          project: { companyId, deletedAt: null },
         },
       },
       select: taskSelect,
@@ -288,9 +275,6 @@ export class DashboardService {
     }));
   }
 
-  /**
-   * D+1 ~ D+7 마감 태스크 (Summary용)
-   */
   private async getUpcoming7DaysTasksForSummary(
     userId: string | undefined,
     companyId: string,
@@ -310,20 +294,12 @@ export class DashboardService {
         assigneeId: userId || undefined,
         deletedAt: null,
         isActive: true,
-        dueDate: {
-          gte: tomorrow,
-          lt: day8,
-        },
-        status: {
-          not: 'completed',
-        },
+        dueDate: { gte: tomorrow, lt: day8 },
+        status: { not: 'completed' },
         projectStage: {
           deletedAt: null,
           isActive: true,
-          project: {
-            companyId,
-            deletedAt: null,
-          },
+          project: { companyId, deletedAt: null },
         },
       },
       select: taskSelect,
@@ -342,12 +318,7 @@ export class DashboardService {
     }));
   }
 
-  /**
-   * 30일 내 만료 예정 문서 (MVP #24)
-   */
-  private async getExpiringDocumentsForSummary(
-    companyId: string,
-  ): Promise<ExpiringDocumentItem[]> {
+  private async getExpiringDocumentsForSummary(companyId: string): Promise<ExpiringDocumentItem[]> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const day30 = new Date(today);
@@ -356,19 +327,11 @@ export class DashboardService {
     const documents = await this.prisma.document.findMany({
       where: {
         deletedAt: null,
-        expiryDate: {
-          gte: today,
-          lte: day30,
-        },
-        project: {
-          companyId,
-          deletedAt: null,
-        },
+        expiryDate: { gte: today, lte: day30 },
+        project: { companyId, deletedAt: null },
       },
       include: {
-        project: {
-          select: { id: true, name: true },
-        },
+        project: { select: { id: true, name: true } },
       },
       orderBy: { expiryDate: 'asc' },
     });
@@ -389,12 +352,7 @@ export class DashboardService {
     });
   }
 
-  /**
-   * 지연 위험 프로젝트 (MVP #25) - 개선된 계산 로직
-   */
-  private async getRiskProjectsForSummary(
-    companyId: string,
-  ): Promise<RiskProjectItem[]> {
+  private async getRiskProjectsForSummary(companyId: string): Promise<RiskProjectItem[]> {
     const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
 
     const projects = await this.prisma.project.findMany({
@@ -431,64 +389,42 @@ export class DashboardService {
       const allTasks = activeStages.flatMap((s) => s.tasks);
       if (allTasks.length === 0) continue;
 
-      // 지연된 태스크 계산
       const overdueTasks = allTasks.filter(
-        (t) =>
-          t.dueDate &&
-          new Date(t.dueDate) < now &&
-          t.status !== 'completed',
+        (t) => t.dueDate && new Date(t.dueDate) < now && t.status !== 'completed',
       );
 
-      // 최대 지연 일수 계산
       let maxDelayDays = 0;
       for (const task of overdueTasks) {
         if (task.dueDate) {
           const delayDays = Math.ceil(
-            (now.getTime() - new Date(task.dueDate).getTime()) /
-              (1000 * 60 * 60 * 24),
+            (now.getTime() - new Date(task.dueDate).getTime()) / (1000 * 60 * 60 * 24),
           );
-          if (delayDays > maxDelayDays) {
-            maxDelayDays = delayDays;
-          }
+          if (delayDays > maxDelayDays) maxDelayDays = delayDays;
         }
       }
 
-      // 완료율 계산
       const completedTasks = allTasks.filter((t) => t.status === 'completed');
-      const completionRate =
-        allTasks.length > 0 ? completedTasks.length / allTasks.length : 0;
+      const completionRate = allTasks.length > 0 ? completedTasks.length / allTasks.length : 0;
 
-      // 현재 단계 가중치 (활성 단계 순서 기반)
       const activeStage = project.stages.find((s) => s.status === 'active');
       const stageWeight = activeStage?.template.order || 1;
 
-      // 위험 점수 계산: (지연일수 × 단계가중치) + (지연태스크수 × 10) + (미완료율 × 20)
       let riskScore =
-        maxDelayDays * stageWeight +
-        overdueTasks.length * 10 +
-        (1 - completionRate) * 20;
+        maxDelayDays * stageWeight + overdueTasks.length * 10 + (1 - completionRate) * 20;
       riskScore = Math.min(Math.round(riskScore), 100);
 
-      // 위험 요인 설명
       const factors: string[] = [];
-      if (overdueTasks.length > 0) {
-        factors.push(`${overdueTasks.length}개 태스크 마감 초과`);
-      }
-      if (maxDelayDays > 0) {
-        factors.push(`최대 ${maxDelayDays}일 지연`);
-      }
-      if (completionRate < 0.5 && allTasks.length > 0) {
+      if (overdueTasks.length > 0) factors.push(`${overdueTasks.length}개 태스크 마감 초과`);
+      if (maxDelayDays > 0) factors.push(`최대 ${maxDelayDays}일 지연`);
+      if (completionRate < 0.5 && allTasks.length > 0)
         factors.push(`진행률 ${Math.round(completionRate * 100)}%`);
-      }
 
-      // 심각도 결정
       let severity: string;
       if (riskScore >= 80) severity = 'critical';
       else if (riskScore >= 50) severity = 'high';
       else if (riskScore >= 30) severity = 'medium';
       else severity = 'low';
 
-      // 80점 이상만 포함 (요청 조건)
       if (riskScore >= 30) {
         riskProjects.push({
           projectId: project.id,
@@ -501,7 +437,8 @@ export class DashboardService {
           completionRate: Math.round(completionRate * 100) / 100,
         });
 
-        // DB에 최신 점수 저장 (비동기로)
+        // (참고) 이 부분은 대시보드 새로고침마다 DB에 계속 쌓이므로 느려질 수 있어요.
+        // 필요하면 env 플래그로 켜고 끄는 걸 추천합니다.
         this.prisma.delayRiskScore
           .create({
             data: {
@@ -515,16 +452,13 @@ export class DashboardService {
               factors,
             },
           })
-          .catch(() => {}); // 에러 무시 (비동기 저장)
+          .catch(() => {});
       }
     }
 
     return riskProjects.sort((a, b) => b.riskScore - a.riskScore);
   }
 
-  /**
-   * 통계 요약
-   */
   private async getStatsForSummary(
     userId: string | undefined,
     companyId: string,
@@ -534,58 +468,60 @@ export class DashboardService {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const [
-      totalProjects,
-      inProgressProjects,
-      totalMyTasks,
-      completedMyTasks,
-      todayDueCount,
-    ] = await Promise.all([
-      this.prisma.project.count({
-        where: { companyId, deletedAt: null },
-      }),
-      this.prisma.project.count({
-        where: { companyId, deletedAt: null, status: 'in_progress' },
-      }),
-      this.prisma.task.count({
-        where: {
-          assigneeId: userId,
-          deletedAt: null,
-          isActive: true,
-          projectStage: {
-            isActive: true,
-            project: { companyId, deletedAt: null },
-          },
-        },
-      }),
-      this.prisma.task.count({
-        where: {
-          assigneeId: userId,
-          deletedAt: null,
-          status: 'completed',
-          isActive: true,
-          projectStage: {
-            isActive: true,
-            project: { companyId, deletedAt: null },
-          },
-        },
-      }),
-      this.prisma.task.count({
-        where: {
-          assigneeId: userId,
-          deletedAt: null,
-          isActive: true,
-          dueDate: { gte: today, lt: tomorrow },
-          status: { not: 'completed' },
-          projectStage: {
-            isActive: true,
-            project: { companyId, deletedAt: null },
-          },
-        },
-      }),
-    ]);
+    // ✅ userId가 없으면 "내 작업" 통계는 0으로 (그리고 Prisma undefined 이슈도 원천 차단)
+    const myUserId = userId || undefined;
 
-    const riskProjects = await this.getRiskProjectsForSummary(companyId);
+    const [totalProjects, inProgressProjects, totalMyTasks, completedMyTasks, todayDueCount] =
+      await Promise.all([
+        this.prisma.project.count({
+          where: { companyId, deletedAt: null },
+        }),
+        this.prisma.project.count({
+          where: { companyId, deletedAt: null, status: 'in_progress' },
+        }),
+        myUserId
+          ? this.prisma.task.count({
+              where: {
+                assigneeId: myUserId,
+                deletedAt: null,
+                isActive: true,
+                projectStage: {
+                  isActive: true,
+                  project: { companyId, deletedAt: null },
+                },
+              },
+            })
+          : Promise.resolve(0),
+        myUserId
+          ? this.prisma.task.count({
+              where: {
+                assigneeId: myUserId,
+                deletedAt: null,
+                status: 'completed',
+                isActive: true,
+                projectStage: {
+                  isActive: true,
+                  project: { companyId, deletedAt: null },
+                },
+              },
+            })
+          : Promise.resolve(0),
+        myUserId
+          ? this.prisma.task.count({
+              where: {
+                assigneeId: myUserId,
+                deletedAt: null,
+                isActive: true,
+                dueDate: { gte: today, lt: tomorrow },
+                status: { not: 'completed' },
+                projectStage: {
+                  isActive: true,
+                  project: { companyId, deletedAt: null },
+                },
+              },
+            })
+          : Promise.resolve(0),
+      ]);
 
     return {
       totalProjects,
@@ -593,13 +529,15 @@ export class DashboardService {
       totalMyTasks,
       completedMyTasks,
       todayDueCount,
-      riskProjectCount: riskProjects.filter((p) => p.riskScore >= 80).length,
+      // ✅ riskProjectCount는 getFullSummary에서 이미 계산해서 덮어씌움
+      riskProjectCount: 0,
     };
   }
 
-  /**
-   * 내일 플래너 (Big3 + 마감 태스크)
-   */
+  // ===========================================
+  // 내일 플래너 / 기존 API (원본 유지)
+  // ===========================================
+
   async getTomorrowDashboard(userId?: string, companyId?: string): Promise<TomorrowDashboardDto> {
     const resolvedCompanyId = await this.resolveCompanyId(companyId);
 
@@ -637,43 +575,19 @@ export class DashboardService {
     try {
       const [overdueRaw, dueTodayRaw, dueTomorrowRaw] = await Promise.all([
         this.prisma.task.findMany({
-          where: {
-            ...baseWhere,
-            dueDate: { lt: todayStart },
-          },
+          where: { ...baseWhere, dueDate: { lt: todayStart } },
           select: taskSelect,
-          orderBy: [
-            { dueDate: 'asc' },
-            { createdAt: 'asc' },
-          ],
+          orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
         }),
         this.prisma.task.findMany({
-          where: {
-            ...baseWhere,
-            dueDate: {
-              gte: todayStart,
-              lt: tomorrowStart,
-            },
-          },
+          where: { ...baseWhere, dueDate: { gte: todayStart, lt: tomorrowStart } },
           select: taskSelect,
-          orderBy: [
-            { dueDate: 'asc' },
-            { createdAt: 'asc' },
-          ],
+          orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
         }),
         this.prisma.task.findMany({
-          where: {
-            ...baseWhere,
-            dueDate: {
-              gte: tomorrowStart,
-              lt: dayAfterStart,
-            },
-          },
+          where: { ...baseWhere, dueDate: { gte: tomorrowStart, lt: dayAfterStart } },
           select: taskSelect,
-          orderBy: [
-            { dueDate: 'asc' },
-            { createdAt: 'asc' },
-          ],
+          orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
         }),
       ]);
 
@@ -719,16 +633,10 @@ export class DashboardService {
       status: task.status,
       dueDate: task.dueDate ? task.dueDate.toISOString() : null,
       project: task.projectStage?.project
-        ? {
-            id: task.projectStage.project.id,
-            name: task.projectStage.project.name,
-          }
+        ? { id: task.projectStage.project.id, name: task.projectStage.project.name }
         : null,
       stage: task.projectStage
-        ? {
-            id: task.projectStage.id,
-            name: task.projectStage.template?.name ?? task.projectStage.id,
-          }
+        ? { id: task.projectStage.id, name: task.projectStage.template?.name ?? task.projectStage.id }
         : null,
     };
   }
@@ -737,22 +645,13 @@ export class DashboardService {
     const uniq = new Map<string, TaskSummaryDto>();
 
     for (const task of tasks) {
-      if (!uniq.has(task.id)) {
-        uniq.set(task.id, task);
-      }
+      if (!uniq.has(task.id)) uniq.set(task.id, task);
       if (uniq.size >= 3) break;
     }
 
     return Array.from(uniq.values());
   }
 
-  // ===========================================
-  // 기존 API들 (하위 호환성 유지)
-  // ===========================================
-
-  /**
-   * MVP #6: 오늘 마감 태스크 조회
-   */
   async getTodayTasks(userId?: string, companyId?: string) {
     const resolvedCompanyId = await this.resolveCompanyId(companyId);
     const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
@@ -767,20 +666,12 @@ export class DashboardService {
         assigneeId: userId || undefined,
         deletedAt: null,
         isActive: true,
-        dueDate: {
-          gte: today,
-          lt: tomorrow,
-        },
-        status: {
-          not: 'completed',
-        },
+        dueDate: { gte: today, lt: tomorrow },
+        status: { not: 'completed' },
         projectStage: {
           deletedAt: null,
           isActive: true,
-          project: {
-            companyId: resolvedCompanyId,
-            deletedAt: null,
-          },
+          project: { companyId: resolvedCompanyId, deletedAt: null },
         },
       },
       select: taskSelect,
@@ -795,18 +686,12 @@ export class DashboardService {
         status: task.status,
         dueDate: task.dueDate,
         isMandatory: task.isMandatory,
-        project: {
-          id: task.projectStage.project.id,
-          name: task.projectStage.project.name,
-        },
+        project: { id: task.projectStage.project.id, name: task.projectStage.project.name },
         stage: task.projectStage.template.name,
       })),
     };
   }
 
-  /**
-   * 이번 주 마감 태스크 조회 (확장)
-   */
   async getUpcomingTasks(userId?: string, companyId?: string, days = 7) {
     const resolvedCompanyId = await this.resolveCompanyId(companyId);
     const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
@@ -821,20 +706,12 @@ export class DashboardService {
         assigneeId: userId || undefined,
         deletedAt: null,
         isActive: true,
-        dueDate: {
-          gte: today,
-          lt: endDate,
-        },
-        status: {
-          not: 'completed',
-        },
+        dueDate: { gte: today, lt: endDate },
+        status: { not: 'completed' },
         projectStage: {
           deletedAt: null,
           isActive: true,
-          project: {
-            companyId: resolvedCompanyId,
-            deletedAt: null,
-          },
+          project: { companyId: resolvedCompanyId, deletedAt: null },
         },
       },
       select: taskSelect,
@@ -847,19 +724,12 @@ export class DashboardService {
     };
   }
 
-  /**
-   * MVP #25: 지연 위험 프로젝트 조회
-   */
   async getRiskProjects(companyId?: string) {
     const resolvedCompanyId = await this.resolveCompanyId(companyId);
-
     const riskProjects = await this.getRiskProjectsForSummary(resolvedCompanyId);
     return riskProjects.filter((p) => p.severity !== 'low');
   }
 
-  /**
-   * 대시보드 요약 통계 (기존 API 유지)
-   */
   async getSummary(userId?: string, companyId?: string) {
     const resolvedCompanyId = await this.resolveCompanyId(companyId);
     const today = new Date();
@@ -889,17 +759,11 @@ export class DashboardService {
     return {
       projects: {
         total: projectStats.reduce((sum, s) => sum + s._count, 0),
-        byStatus: projectStats.reduce(
-          (acc, s) => ({ ...acc, [s.status]: s._count }),
-          {},
-        ),
+        byStatus: projectStats.reduce((acc, s) => ({ ...acc, [s.status]: s._count }), {}),
       },
       myTasks: {
         total: myTaskStats.reduce((sum, s) => sum + s._count, 0),
-        byStatus: myTaskStats.reduce(
-          (acc, s) => ({ ...acc, [s.status]: s._count }),
-          {},
-        ),
+        byStatus: myTaskStats.reduce((acc, s) => ({ ...acc, [s.status]: s._count }), {}),
       },
       todayDue: todayTasks.count,
       riskProjectCount: riskProjects.length,
