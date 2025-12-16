@@ -14,6 +14,24 @@ async function main() {
   });
   console.log('✅ Company created:', company.name);
 
+  // Budget 기본 카테고리 생성
+  const defaultBudgetCategories = [
+    { name: '구조물 자재/시공', vendorRole: 'structure', isDefault: true, order: 1 },
+    { name: '전기공사', vendorRole: 'electrical', isDefault: true, order: 2 },
+    { name: '전기설계', vendorRole: 'electrical_design', isDefault: true, order: 3 },
+    { name: '구조검토', vendorRole: 'structural_review', isDefault: true, order: 4 },
+    { name: 'EPC', vendorRole: 'epc', isDefault: true, order: 5 },
+    { name: '유지보수', vendorRole: 'om', isDefault: true, order: 6 },
+    { name: '금융비용', vendorRole: 'finance', isDefault: true, order: 7 },
+    { name: '기타', vendorRole: 'other', isDefault: true, order: 8 },
+  ];
+
+  await prisma.budgetCategory.createMany({
+    data: defaultBudgetCategories.map((category) => ({ ...category, companyId: company.id })),
+    skipDuplicates: true,
+  });
+  console.log('✅ Default budget categories created');
+
   // 2. 사용자 생성
   const admin = await prisma.user.create({
     data: {
