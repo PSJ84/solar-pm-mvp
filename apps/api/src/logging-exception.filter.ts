@@ -1,4 +1,5 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 @Catch()
 export class LoggingExceptionFilter implements ExceptionFilter {
@@ -15,14 +16,33 @@ export class LoggingExceptionFilter implements ExceptionFilter {
         ? responseBody
         : (responseBody as Record<string, any>)?.message || 'Internal server error';
 
-    const stackSnippet = exception instanceof Error && exception.stack
-      ? exception.stack.split('\n').slice(0, 3).join('\n')
-      : undefined;
+    const error = exception as any;
+    const isPrismaError =
+      error instanceof Prisma.PrismaClientKnownRequestError ||
+      error instanceof Prisma.PrismaClientUnknownRequestError ||
+      error instanceof Prisma.PrismaClientInitializationError ||
+      error instanceof Prisma.PrismaClientValidationError ||
+      error instanceof Prisma.PrismaClientRustPanicError;
 
-    console.error(
-      `[${request.method}] ${request.url} -> status ${status}: ${message}`,
-      stackSnippet,
-    );
+    const logPayload: Record<string, any> = {
+      name: error?.name,
+      message: error?.message,
+      stack: error?.stack,
+    };
+
+    if (isPrismaError && 'code' in error) {
+      logPayload.code = (error as Prisma.PrismaClientKnownRequestError).code;
+    }
+
+    if (isPrismaError && 'meta' in error) {
+      logPayload.meta = (error as Prisma.PrismaClientKnownRequestError).meta;
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(`[${request.method}] ${request.url} -> status ${status}`, logPayload);
+    } else {
+      console.error(`[${request.method}] ${request.url} -> status ${status}: ${message}`);
+    }
 
     response.status(status).json({
       statusCode: status,

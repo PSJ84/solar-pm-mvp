@@ -14,6 +14,7 @@ import { TemplatesModule } from './templates/templates.module';
 import { ChecklistModule } from './checklist/checklist.module';
 import { HealthModule } from './health/health.module';
 import { VendorsModule } from './vendors/vendors.module';
+import { BudgetModule } from './budget/budget.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { VendorsModule } from './vendors/vendors.module';
     ChecklistModule,
     HealthModule,
     VendorsModule,
+    BudgetModule,
   ],
 })
 export class AppModule {}

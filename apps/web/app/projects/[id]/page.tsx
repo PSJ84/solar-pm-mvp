@@ -29,6 +29,7 @@ import { cn, STATUS_LABELS, formatRelativeTime, getProgressColor } from '@/lib/u
 import { projectsApi, stagesApi, tasksApi, templatesApi, vendorsApi } from '@/lib/api';
 import { ChecklistPanel } from '@/components/checklist/ChecklistPanel';
 import { AddTaskModal } from '@/components/tasks/AddTaskModal';
+import { ProjectBudgetTab } from '@/components/budget/ProjectBudgetTab';
 import type { Project, ProjectStage, ProjectVendor, Task, TaskHistory, TaskStatus, Vendor, VendorRole } from '@/types';
 import type { TemplateListItemDto } from '../../../../../packages/shared/src/types/template.types';
 
@@ -163,7 +164,7 @@ export default function ProjectDetailPage() {
   const hasInitializedFromUrlRef = useRef(false);
   const [isAddStageModalOpen, setIsAddStageModalOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [activeTab, setActiveTab] = useState<'stages' | 'info' | 'vendors'>('stages');
+  const [activeTab, setActiveTab] = useState<'stages' | 'info' | 'vendors' | 'budget'>('stages');
   const [projectForm, setProjectForm] = useState({
     name: '',
     address: '',
@@ -1550,6 +1551,18 @@ export default function ProjectDetailPage() {
           >
             협력업체
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('budget')}
+            className={cn(
+              'px-4 py-2 text-sm font-semibold rounded-lg border',
+              activeTab === 'budget'
+                ? 'bg-solar-50 text-solar-700 border-solar-200'
+                : 'bg-white text-slate-700 border-slate-200',
+            )}
+          >
+            예산/정산
+          </button>
         </div>
 
         {activeTab === 'stages' && (
@@ -2032,6 +2045,14 @@ export default function ProjectDetailPage() {
         {activeTab === 'info' && renderProjectInfoTab()}
 
         {activeTab === 'vendors' && renderVendorTab()}
+
+        {activeTab === 'budget' && projectId && projectWithDerived && (
+          <ProjectBudgetTab
+            projectId={projectId}
+            projectVendors={projectWithDerived.projectVendors || []}
+            onToast={(message, type) => showToast(message, type)}
+          />
+        )}
       </main>
 
       {addTaskModalStageId && projectId && (
