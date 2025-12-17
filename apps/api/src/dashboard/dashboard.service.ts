@@ -113,15 +113,6 @@ export class DashboardService {
           deletedAt: null,
         },
       },
-      OR: [
-        { assigneeId: userId },
-        {
-          assigneeId: null,
-          projectStage: {
-            project: { companyId: resolvedCompanyId },
-          },
-        },
-      ],
     };
 
     let tabWhere: Prisma.TaskWhereInput = {};
@@ -155,9 +146,14 @@ export class DashboardService {
     const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
     const taskSelect = this.buildTaskSelect(includeNotificationColumn);
 
+    const assigneeConditions: Prisma.TaskWhereInput[] = userId
+      ? [{ assigneeId: userId }, { assigneeId: null }]
+      : [{ assigneeId: null }];
+
     const tasks = await this.prisma.task.findMany({
       where: {
         AND: [baseWhere, tabWhere],
+        OR: assigneeConditions,
       },
       select: taskSelect,
       orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
