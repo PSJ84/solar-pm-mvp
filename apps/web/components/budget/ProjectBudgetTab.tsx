@@ -334,6 +334,9 @@ export function ProjectBudgetTab({ projectId, projectVendors, onToast }: Project
         <div className="bg-white border border-slate-200 rounded-xl p-6 text-center space-y-3">
           <p className="text-sm text-slate-700">아직 예산 품목이 없습니다.</p>
           <p className="text-xs text-slate-500">기본 카테고리를 추가해 예산 관리를 시작하세요.</p>
+          {!categories.length && (
+            <p className="text-xs text-red-500">기본 카테고리가 DB에 없습니다. 초기화 버튼을 눌러 자동 생성하세요.</p>
+          )}
           <button
             type="button"
             onClick={handleInitialize}

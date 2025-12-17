@@ -10,6 +10,17 @@ import {
 
 @Injectable()
 export class BudgetService {
+  private readonly defaultBudgetCategories: Array<{ name: string; vendorRole: VendorRole; order: number }> = [
+    { name: '구조물 자재/시공', vendorRole: VendorRole.structure, order: 1 },
+    { name: '전기공사', vendorRole: VendorRole.electrical, order: 2 },
+    { name: '전기설계', vendorRole: VendorRole.electrical_design, order: 3 },
+    { name: '구조검토', vendorRole: VendorRole.structural_review, order: 4 },
+    { name: 'EPC', vendorRole: VendorRole.epc, order: 5 },
+    { name: '유지보수', vendorRole: VendorRole.om, order: 6 },
+    { name: '금융비용', vendorRole: VendorRole.finance, order: 7 },
+    { name: '기타', vendorRole: VendorRole.other, order: 8 },
+  ];
+
   constructor(private readonly prisma: PrismaService) {}
 
   private async resolveCompanyId(optionalCompanyId?: string): Promise<string> {
@@ -49,10 +60,7 @@ export class BudgetService {
   async getCategories(companyId?: string) {
     const resolvedCompanyId = await this.resolveCompanyId(companyId);
 
-    return this.prisma.budgetCategory.findMany({
-      where: { companyId: resolvedCompanyId, deletedAt: null },
-      orderBy: { order: 'asc' },
-    });
+    return this.ensureDefaultCategories(resolvedCompanyId);
   }
 
   async createCategory(dto: CreateBudgetCategoryDto, companyId?: string) {
@@ -141,36 +149,30 @@ export class BudgetService {
   async initializeProjectBudget(projectId: string, companyId?: string) {
     const project = await this.ensureProject(projectId, companyId);
 
-    const [defaultCategories, existingItems] = await Promise.all([
-      this.prisma.budgetCategory.findMany({
-        where: {
-          companyId: project.companyId,
-          isDefault: true,
-          deletedAt: null,
-        },
-        orderBy: { order: 'asc' },
-      }),
-      this.prisma.projectBudgetItem.findMany({
+    await this.prisma.$transaction(async (tx) => {
+      const defaultCategories = await this.ensureDefaultCategories(project.companyId, tx);
+
+      const existingItems = await tx.projectBudgetItem.findMany({
         where: { projectId: project.id, deletedAt: null },
         select: { categoryId: true },
-      }),
-    ]);
+      });
 
-    const existingCategoryIds = new Set(existingItems.map((item) => item.categoryId));
+      const existingCategoryIds = new Set(existingItems.map((item) => item.categoryId));
+      const missingCategories = defaultCategories.filter((category) => !existingCategoryIds.has(category.id));
 
-    for (const category of defaultCategories) {
-      if (!existingCategoryIds.has(category.id)) {
-        await this.prisma.projectBudgetItem.create({
-          data: {
+      if (missingCategories.length) {
+        await tx.projectBudgetItem.createMany({
+          data: missingCategories.map((category) => ({
             projectId: project.id,
             categoryId: category.id,
             contractAmount: new Prisma.Decimal(0),
             plannedAmount: new Prisma.Decimal(0),
             actualAmount: new Prisma.Decimal(0),
-          },
+          })),
+          skipDuplicates: true,
         });
       }
-    }
+    });
 
     return this.getProjectBudget(projectId, companyId);
   }
@@ -238,6 +240,34 @@ export class BudgetService {
     return this.prisma.projectBudgetItem.update({
       where: { id },
       data: { deletedAt: new Date() },
+    });
+  }
+
+  private async ensureDefaultCategories(
+    companyId: string,
+    tx: Pick<PrismaService, 'budgetCategory'> | Prisma.TransactionClient = this.prisma,
+  ) {
+    const categories = await tx.budgetCategory.findMany({
+      where: { companyId, isDefault: true, deletedAt: null },
+      orderBy: { order: 'asc' },
+    });
+
+    if (categories.length > 0) {
+      return categories;
+    }
+
+    await tx.budgetCategory.createMany({
+      data: this.defaultBudgetCategories.map((category) => ({
+        ...category,
+        companyId,
+        isDefault: true,
+      })),
+      skipDuplicates: true,
+    });
+
+    return tx.budgetCategory.findMany({
+      where: { companyId, isDefault: true, deletedAt: null },
+      orderBy: { order: 'asc' },
     });
   }
 }
