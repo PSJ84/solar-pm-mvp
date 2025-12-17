@@ -218,14 +218,18 @@ export class DashboardService {
   async getFullSummary(userId?: string, companyId?: string): Promise<DashboardSummaryDto> {
     const resolvedCompanyId = await this.resolveCompanyId(companyId);
 
-    const [todayTasks, upcoming7Days, expiringDocuments, riskProjects, stats] =
-      await Promise.all([
-        this.getTodayTasksForSummary(userId, resolvedCompanyId),
-        this.getUpcoming7DaysTasksForSummary(userId, resolvedCompanyId),
-        this.getExpiringDocumentsForSummary(resolvedCompanyId),
-        this.getRiskProjectsForSummary(resolvedCompanyId),
-        this.getStatsForSummary(userId, resolvedCompanyId),
-      ]);
+    // notificationEnabled 컬럼 존재 여부를 한 번만 확인
+    const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
+
+    // riskProjects를 먼저 계산하고 재사용
+    const riskProjects = await this.getRiskProjectsForSummary(resolvedCompanyId);
+
+    const [todayTasks, upcoming7Days, expiringDocuments, stats] = await Promise.all([
+      this.getTodayTasksForSummary(userId, resolvedCompanyId, includeNotificationColumn),
+      this.getUpcoming7DaysTasksForSummary(userId, resolvedCompanyId, includeNotificationColumn),
+      this.getExpiringDocumentsForSummary(resolvedCompanyId),
+      this.getStatsForSummary(userId, resolvedCompanyId, riskProjects),
+    ]);
 
     return {
       todayTasks,
@@ -242,8 +246,8 @@ export class DashboardService {
   private async getTodayTasksForSummary(
     userId: string | undefined,
     companyId: string,
+    includeNotificationColumn: boolean = false,
   ): Promise<TaskSummaryItem[]> {
-    const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
     const taskSelect = this.buildTaskSelect(includeNotificationColumn);
 
     const today = new Date();
@@ -294,8 +298,8 @@ export class DashboardService {
   private async getUpcoming7DaysTasksForSummary(
     userId: string | undefined,
     companyId: string,
+    includeNotificationColumn: boolean = false,
   ): Promise<TaskSummaryItem[]> {
-    const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
     const taskSelect = this.buildTaskSelect(includeNotificationColumn);
 
     const today = new Date();
@@ -390,53 +394,87 @@ export class DashboardService {
   }
 
   /**
-   * 지연 위험 프로젝트 (MVP #25) - 개선된 계산 로직
+   * 지연 위험 프로젝트 (MVP #25) - 최적화된 계산 로직
+   * DB 집계 쿼리로 변경하여 성능 개선
    */
   private async getRiskProjectsForSummary(
     companyId: string,
   ): Promise<RiskProjectItem[]> {
-    const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
-
+    // 1. 프로젝트 목록만 먼저 가져오기 (stages/tasks 제외)
     const projects = await this.prisma.project.findMany({
       where: {
         companyId,
         deletedAt: null,
         status: 'in_progress',
       },
-      include: {
+      select: {
+        id: true,
+        name: true,
         stages: {
           where: { deletedAt: null, isActive: true },
-          include: {
-            tasks: {
-              where: { deletedAt: null, isActive: true },
+          select: {
+            id: true,
+            status: true,
+            template: {
               select: {
-                id: true,
-                status: true,
-                dueDate: true,
-                isActive: true,
-                ...(includeNotificationColumn ? { notificationEnabled: true } : {}),
+                order: true,
               },
             },
-            template: true,
           },
         },
       },
     });
 
-    const now = new Date();
-    const riskProjects: RiskProjectItem[] = [];
+    if (projects.length === 0) return [];
 
+    const projectIds = projects.map((p) => p.id);
+    const now = new Date();
+
+    // 2. 모든 태스크를 한 번의 쿼리로 가져오기 (집계 최적화)
+    const tasks = await this.prisma.task.findMany({
+      where: {
+        deletedAt: null,
+        isActive: true,
+        projectStage: {
+          projectId: { in: projectIds },
+          deletedAt: null,
+          isActive: true,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+        dueDate: true,
+        projectStageId: true,
+        projectStage: {
+          select: {
+            projectId: true,
+          },
+        },
+      },
+    });
+
+    // 3. 프로젝트별로 태스크 그룹화
+    const tasksByProject = new Map<string, typeof tasks>();
+    for (const task of tasks) {
+      const projectId = task.projectStage.projectId;
+      if (!tasksByProject.has(projectId)) {
+        tasksByProject.set(projectId, []);
+      }
+      tasksByProject.get(projectId)!.push(task);
+    }
+
+    const riskProjects: RiskProjectItem[] = [];
+    const delayRiskScoreCreates: Array<Promise<any>> = [];
+
+    // 4. 각 프로젝트의 위험 점수 계산
     for (const project of projects) {
-      const activeStages = project.stages.filter((s) => s.isActive !== false);
-      const allTasks = activeStages.flatMap((s) => s.tasks);
-      if (allTasks.length === 0) continue;
+      const projectTasks = tasksByProject.get(project.id) || [];
+      if (projectTasks.length === 0) continue;
 
       // 지연된 태스크 계산
-      const overdueTasks = allTasks.filter(
-        (t) =>
-          t.dueDate &&
-          new Date(t.dueDate) < now &&
-          t.status !== 'completed',
+      const overdueTasks = projectTasks.filter(
+        (t) => t.dueDate && new Date(t.dueDate) < now && t.status !== 'completed',
       );
 
       // 최대 지연 일수 계산
@@ -444,8 +482,7 @@ export class DashboardService {
       for (const task of overdueTasks) {
         if (task.dueDate) {
           const delayDays = Math.ceil(
-            (now.getTime() - new Date(task.dueDate).getTime()) /
-              (1000 * 60 * 60 * 24),
+            (now.getTime() - new Date(task.dueDate).getTime()) / (1000 * 60 * 60 * 24),
           );
           if (delayDays > maxDelayDays) {
             maxDelayDays = delayDays;
@@ -454,9 +491,9 @@ export class DashboardService {
       }
 
       // 완료율 계산
-      const completedTasks = allTasks.filter((t) => t.status === 'completed');
+      const completedTasks = projectTasks.filter((t) => t.status === 'completed');
       const completionRate =
-        allTasks.length > 0 ? completedTasks.length / allTasks.length : 0;
+        projectTasks.length > 0 ? completedTasks.length / projectTasks.length : 0;
 
       // 현재 단계 가중치 (활성 단계 순서 기반)
       const activeStage = project.stages.find((s) => s.status === 'active');
@@ -477,7 +514,7 @@ export class DashboardService {
       if (maxDelayDays > 0) {
         factors.push(`최대 ${maxDelayDays}일 지연`);
       }
-      if (completionRate < 0.5 && allTasks.length > 0) {
+      if (completionRate < 0.5 && projectTasks.length > 0) {
         factors.push(`진행률 ${Math.round(completionRate * 100)}%`);
       }
 
@@ -488,7 +525,7 @@ export class DashboardService {
       else if (riskScore >= 30) severity = 'medium';
       else severity = 'low';
 
-      // 80점 이상만 포함 (요청 조건)
+      // 30점 이상만 포함
       if (riskScore >= 30) {
         riskProjects.push({
           projectId: project.id,
@@ -501,23 +538,28 @@ export class DashboardService {
           completionRate: Math.round(completionRate * 100) / 100,
         });
 
-        // DB에 최신 점수 저장 (비동기로)
-        this.prisma.delayRiskScore
-          .create({
-            data: {
-              projectId: project.id,
-              score: riskScore,
-              severity,
-              overdueTaskCount: overdueTasks.length,
-              upcomingTaskCount: 0,
-              completionRate,
-              maxDelayDays,
-              factors,
-            },
-          })
-          .catch(() => {}); // 에러 무시 (비동기 저장)
+        // DB에 최신 점수 저장 (배치로 처리)
+        delayRiskScoreCreates.push(
+          this.prisma.delayRiskScore
+            .create({
+              data: {
+                projectId: project.id,
+                score: riskScore,
+                severity,
+                overdueTaskCount: overdueTasks.length,
+                upcomingTaskCount: 0,
+                completionRate,
+                maxDelayDays,
+                factors,
+              },
+            })
+            .catch(() => {}), // 에러 무시 (비동기 저장)
+        );
       }
     }
+
+    // 5. 모든 delayRiskScore 생성 작업을 병렬로 실행 (응답 대기하지 않음)
+    Promise.all(delayRiskScoreCreates).catch(() => {});
 
     return riskProjects.sort((a, b) => b.riskScore - a.riskScore);
   }
@@ -528,6 +570,7 @@ export class DashboardService {
   private async getStatsForSummary(
     userId: string | undefined,
     companyId: string,
+    riskProjects: RiskProjectItem[],
   ): Promise<DashboardSummaryDto['stats']> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -584,8 +627,6 @@ export class DashboardService {
         },
       }),
     ]);
-
-    const riskProjects = await this.getRiskProjectsForSummary(companyId);
 
     return {
       totalProjects,
