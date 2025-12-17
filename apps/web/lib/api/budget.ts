@@ -4,7 +4,10 @@ import { api } from './client';
 
 export const budgetApi = {
   getCategories: () => api.get<BudgetCategory[]>('/budget/categories'),
-  createCategory: (data: { name: string }) => api.post<BudgetCategory>('/budget/categories', data),
+  createCategory: (data: { name: string; vendorRole?: string | null; order?: number }) =>
+    api.post<BudgetCategory>('/budget/categories', data),
+  updateCategory: (id: string, data: Partial<Pick<BudgetCategory, 'name' | 'vendorRole' | 'order'>>) =>
+    api.patch<BudgetCategory>(`/budget/categories/${id}`, data),
   deleteCategory: (id: string) => api.delete(`/budget/categories/${id}`),
   getProjectBudget: (projectId: string) => api.get<BudgetProjectResponse>(`/budget/projects/${projectId}`),
   initializeProjectBudget: (projectId: string) => api.post(`/budget/projects/${projectId}/initialize`, {}),

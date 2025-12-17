@@ -1,10 +1,12 @@
 // apps/web/types/budget.ts
-import type { Vendor } from './index';
+import type { Vendor, VendorRole } from './index';
 
 export interface BudgetCategory {
   id: string;
   name: string;
   order?: number;
+  vendorRole?: VendorRole | null;
+  isDefault?: boolean;
 }
 
 export interface BudgetItem {

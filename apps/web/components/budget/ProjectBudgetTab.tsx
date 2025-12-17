@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Loader2, Plus, RefreshCcw, Trash2 } from 'lucide-react';
+import { AlertCircle, Loader2, Plus, RefreshCcw, Settings, Trash2, X } from 'lucide-react';
 import { budgetApi } from '@/lib/api';
 import type { BudgetCategory, BudgetItem, BudgetProjectResponse } from '@/types/budget';
-import type { ProjectVendor } from '@/types';
+import type { ProjectVendor, VendorRole } from '@/types';
 import { cn } from '@/lib/utils';
 
 interface ProjectBudgetTabProps {
@@ -22,10 +22,22 @@ const currencyFormatter = new Intl.NumberFormat('ko-KR', {
 
 const formatCurrency = (value: number) => currencyFormatter.format(value || 0);
 
+const vendorRoleOptions: Array<{ value: VendorRole; label: string }> = [
+  { value: 'structure', label: '구조물 시공' },
+  { value: 'electrical', label: '전기공사' },
+  { value: 'electrical_design', label: '전기설계' },
+  { value: 'structural_review', label: '구조검토' },
+  { value: 'epc', label: 'EPC' },
+  { value: 'om', label: '유지보수' },
+  { value: 'finance', label: '금융비용' },
+  { value: 'other', label: '기타' },
+];
+
 export function ProjectBudgetTab({ projectId, projectVendors, onToast }: ProjectBudgetTabProps) {
   const queryClient = useQueryClient();
   const [amountDrafts, setAmountDrafts] = useState<Record<string, { contract: string; planned: string; actual: string }>>({});
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
 
   const budgetQueryKey = useMemo(() => ['budget', 'project', projectId], [projectId]);
   const categoriesQueryKey = useMemo(() => ['budget', 'categories'], []);
@@ -301,28 +313,37 @@ export function ProjectBudgetTab({ projectId, projectVendors, onToast }: Project
           <div className="flex items-center gap-2 text-sm text-slate-700">
             <Plus className="h-4 w-4 text-solar-500" /> 품목 추가
           </div>
-          <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
-            <select
-              value={selectedCategoryId}
-              onChange={(e) => setSelectedCategoryId(e.target.value)}
-              className="flex-1 rounded-lg border border-slate-200 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
-            >
-              <option value="">추가할 카테고리를 선택하세요</option>
-              {availableCategories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto md:items-center md:justify-end">
             <button
               type="button"
-              onClick={handleAddItem}
-              disabled={!selectedCategoryId || addItemMutation.isPending}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-solar-500 text-white rounded-lg hover:bg-solar-600 disabled:opacity-60"
+              onClick={() => setIsCategoryManagerOpen(true)}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-slate-200 text-sm text-slate-700 rounded-lg hover:bg-slate-50"
             >
-              {addItemMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              추가
+              <Settings className="h-4 w-4" /> 카테고리 관리
             </button>
+            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+              <select
+                value={selectedCategoryId}
+                onChange={(e) => setSelectedCategoryId(e.target.value)}
+                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+              >
+                <option value="">추가할 카테고리를 선택하세요</option>
+                {availableCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleAddItem}
+                disabled={!selectedCategoryId || addItemMutation.isPending}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-solar-500 text-white rounded-lg hover:bg-solar-600 disabled:opacity-60"
+              >
+                {addItemMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                추가
+              </button>
+            </div>
           </div>
         </div>
         {!availableCategories.length && (
@@ -352,6 +373,342 @@ export function ProjectBudgetTab({ projectId, projectVendors, onToast }: Project
           {items.map((item) => renderItemCard(item))}
         </div>
       )}
+
+      <CategoryManager
+        isOpen={isCategoryManagerOpen}
+        onClose={() => setIsCategoryManagerOpen(false)}
+        categories={categories}
+        categoriesQueryKey={categoriesQueryKey}
+        budgetQueryKey={budgetQueryKey}
+        onToast={onToast}
+      />
+    </div>
+  );
+}
+
+interface CategoryManagerProps {
+  isOpen: boolean;
+  onClose: () => void;
+  categories: BudgetCategory[];
+  categoriesQueryKey: (string | number)[];
+  budgetQueryKey: (string | number)[];
+  onToast: (message: string, type?: 'error' | 'info' | 'success') => void;
+}
+
+function CategoryManager({ isOpen, onClose, categories, categoriesQueryKey, budgetQueryKey, onToast }: CategoryManagerProps) {
+  const queryClient = useQueryClient();
+  const [drafts, setDrafts] = useState<Record<string, { name: string; vendorRole: VendorRole | '' }>>({});
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryVendorRole, setNewCategoryVendorRole] = useState('');
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const nextDrafts: Record<string, { name: string; vendorRole: VendorRole | '' }> = {};
+    categories.forEach((category) => {
+      nextDrafts[category.id] = {
+        name: category.name,
+        vendorRole: (category.vendorRole || '') as VendorRole | '',
+      };
+    });
+    setDrafts(nextDrafts);
+  }, [categories]);
+
+  const applyCategoryToBudgetItems = (category: BudgetCategory) => {
+    queryClient.setQueryData<BudgetProjectResponse | undefined>(budgetQueryKey, (prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        items: prev.items.map((item) =>
+          item.categoryId === category.id ? { ...item, category: { ...(item.category || {}), ...category } } : item,
+        ),
+      };
+    });
+  };
+
+  const createCategoryMutation = useMutation({
+    mutationFn: async (payload: { name: string; vendorRole?: string | null }) => {
+      const res = await budgetApi.createCategory({ name: payload.name, vendorRole: payload.vendorRole });
+      return res.data;
+    },
+    onMutate: async (payload) => {
+      await queryClient.cancelQueries({ queryKey: categoriesQueryKey });
+      const previous = queryClient.getQueryData<BudgetCategory[]>(categoriesQueryKey) || [];
+      const tempId = `temp-${Date.now()}`;
+      const optimistic: BudgetCategory = {
+        id: tempId,
+        name: payload.name,
+        vendorRole: (payload.vendorRole as VendorRole | null | undefined) ?? null,
+        isDefault: false,
+        order: (previous[previous.length - 1]?.order || 0) + 1,
+      };
+      queryClient.setQueryData<BudgetCategory[]>(categoriesQueryKey, [...previous, optimistic]);
+      return { previous, tempId };
+    },
+    onError: (_error, _payload, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(categoriesQueryKey, context.previous);
+      }
+      onToast('카테고리를 추가하지 못했어요.', 'error');
+    },
+    onSuccess: (data, _payload, context) => {
+      queryClient.setQueryData<BudgetCategory[]>(categoriesQueryKey, (prev = []) =>
+        prev.map((category) => (category.id === context?.tempId ? data : category)),
+      );
+      onToast('카테고리를 추가했어요.', 'success');
+      setNewCategoryName('');
+      setNewCategoryVendorRole('');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: categoriesQueryKey });
+    },
+  });
+
+  const updateCategoryMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<BudgetCategory> }) => {
+      const res = await budgetApi.updateCategory(id, {
+        name: data.name,
+        vendorRole: (data.vendorRole as VendorRole | undefined) ?? undefined,
+        order: data.order,
+      });
+      return res.data;
+    },
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: categoriesQueryKey });
+      const previous = queryClient.getQueryData<BudgetCategory[]>(categoriesQueryKey) || [];
+      queryClient.setQueryData<BudgetCategory[]>(categoriesQueryKey, (prev = []) =>
+        prev.map((category) => (category.id === id ? { ...category, ...data } : category)),
+      );
+      const updated = previous.find((category) => category.id === id);
+      if (updated) {
+        applyCategoryToBudgetItems({ ...updated, ...data });
+      }
+      return { previous };
+    },
+    onError: (_error, _payload, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(categoriesQueryKey, context.previous);
+      }
+      onToast('카테고리를 수정하지 못했어요.', 'error');
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData<BudgetCategory[]>(categoriesQueryKey, (prev = []) =>
+        prev.map((category) => (category.id === data.id ? data : category)),
+      );
+      applyCategoryToBudgetItems(data);
+      onToast('카테고리를 수정했어요.', 'success');
+    },
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (id: string) => budgetApi.deleteCategory(id),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: categoriesQueryKey });
+      const previous = queryClient.getQueryData<BudgetCategory[]>(categoriesQueryKey) || [];
+      queryClient.setQueryData<BudgetCategory[]>(categoriesQueryKey, (prev = []) => prev.filter((category) => category.id !== id));
+      return { previous };
+    },
+    onError: (_error, _payload, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(categoriesQueryKey, context.previous);
+      }
+      onToast('카테고리를 삭제하지 못했어요.', 'error');
+    },
+    onSuccess: (_data, id) => {
+      onToast('카테고리를 삭제했어요.', 'success');
+      queryClient.invalidateQueries({ queryKey: budgetQueryKey });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: categoriesQueryKey });
+    },
+  });
+
+  const handleCreate = () => {
+    if (!newCategoryName.trim()) {
+      onToast('카테고리 이름을 입력해주세요.', 'error');
+      return;
+    }
+    createCategoryMutation.mutate({ name: newCategoryName.trim(), vendorRole: newCategoryVendorRole || undefined });
+  };
+
+  const handleSave = (categoryId: string) => {
+    const draft = drafts[categoryId];
+    const original = categories.find((category) => category.id === categoryId);
+    if (!draft || !original) return;
+
+    if (draft.name === original.name && (draft.vendorRole || '') === (original.vendorRole || '')) {
+      onToast('변경 사항이 없습니다.', 'info');
+      return;
+    }
+
+    setSavingId(categoryId);
+    updateCategoryMutation.mutate(
+      { id: categoryId, data: { name: draft.name, vendorRole: draft.vendorRole || undefined } },
+      {
+        onSettled: () => setSavingId(null),
+      },
+    );
+  };
+
+  const handleDelete = (categoryId: string, isDefault?: boolean) => {
+    if (isDefault) {
+      onToast('기본 카테고리는 삭제할 수 없습니다.', 'error');
+      return;
+    }
+    setDeletingId(categoryId);
+    deleteCategoryMutation.mutate(categoryId, {
+      onSettled: () => setDeletingId(null),
+    });
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-slate-900/40 px-4 pb-4 md:pb-0">
+      <div className="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-2xl shadow-xl overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b">
+          <div>
+            <p className="text-base font-semibold text-slate-900">카테고리 관리</p>
+            <p className="text-xs text-slate-500">추가/수정/삭제 시 즉시 예산 탭에 반영됩니다.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100"
+            aria-label="닫기"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4 max-h-[80vh] overflow-y-auto">
+          <div className="space-y-2">
+            {categories.map((category) => {
+              const draft = drafts[category.id] || { name: category.name, vendorRole: (category.vendorRole || '') as VendorRole | '' };
+              return (
+                <div
+                  key={category.id}
+                  className="border border-slate-200 rounded-xl p-3 bg-slate-50 flex flex-col gap-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                      <span>{category.name}</span>
+                      {category.isDefault && (
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-solar-50 text-solar-600 border border-solar-100">
+                          기본
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSave(category.id)}
+                        disabled={!draft.name.trim() || savingId === category.id || updateCategoryMutation.isPending}
+                        className="px-3 py-1.5 text-xs rounded-lg bg-solar-500 text-white hover:bg-solar-600 disabled:opacity-60"
+                      >
+                        {savingId === category.id && updateCategoryMutation.isPending ? '저장 중...' : '수정'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(category.id, category.isDefault)}
+                        disabled={category.isDefault || deletingId === category.id || deleteCategoryMutation.isPending}
+                        className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 text-red-600 hover:bg-red-50 disabled:opacity-60"
+                      >
+                        {deletingId === category.id && deleteCategoryMutation.isPending ? '삭제 중...' : '삭제'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label className="space-y-1 text-sm text-slate-700">
+                      <span className="font-medium">카테고리명</span>
+                      <input
+                        type="text"
+                        value={draft.name}
+                        onChange={(e) =>
+                          setDrafts((prev) => ({
+                            ...prev,
+                            [category.id]: {
+                              ...draft,
+                              name: e.target.value,
+                            },
+                          }))
+                        }
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+                      />
+                    </label>
+                    <label className="space-y-1 text-sm text-slate-700">
+                      <span className="font-medium">협력업체 역할 (선택)</span>
+                      <select
+                        value={draft.vendorRole || ''}
+                        onChange={(e) =>
+                          setDrafts((prev) => ({
+                            ...prev,
+                            [category.id]: {
+                              ...draft,
+                              vendorRole: (e.target.value as VendorRole) || '',
+                            },
+                          }))
+                        }
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+                      >
+                        <option value="">선택 안 함</option>
+                        {vendorRoleOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+            {!categories.length && <p className="text-xs text-slate-500">등록된 카테고리가 없습니다.</p>}
+          </div>
+
+          <div className="border border-dashed border-slate-300 rounded-xl p-4 bg-slate-50 space-y-3">
+            <p className="text-sm font-semibold text-slate-900">새 카테고리 추가</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="space-y-1 text-sm text-slate-700">
+                <span className="font-medium">카테고리명</span>
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="예: 자재 구입"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+                />
+              </label>
+              <label className="space-y-1 text-sm text-slate-700">
+                <span className="font-medium">협력업체 역할 (선택)</span>
+                <select
+                  value={newCategoryVendorRole}
+                  onChange={(e) => setNewCategoryVendorRole(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-solar-300 focus:border-solar-400"
+                >
+                  <option value="">선택 안 함</option>
+                  {vendorRoleOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleCreate}
+                disabled={createCategoryMutation.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-solar-500 text-white rounded-lg hover:bg-solar-600 disabled:opacity-60"
+              >
+                {createCategoryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                추가
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

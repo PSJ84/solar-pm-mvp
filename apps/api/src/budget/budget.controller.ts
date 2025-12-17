@@ -1,15 +1,22 @@
 // apps/api/src/budget/budget.controller.ts
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BudgetService } from './budget.service';
-import { CreateBudgetCategoryDto, CreateBudgetItemDto, UpdateBudgetItemDto } from './dto/budget.dto';
+import { BudgetTimingInterceptor } from './interceptors/budget-timing.interceptor';
+import {
+  CreateBudgetCategoryDto,
+  CreateBudgetItemDto,
+  UpdateBudgetCategoryDto,
+  UpdateBudgetItemDto,
+} from './dto/budget.dto';
 
 @ApiTags('Budget')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('budget')
+@UseInterceptors(BudgetTimingInterceptor)
 export class BudgetController {
   constructor(private readonly budgetService: BudgetService) {}
 
@@ -25,6 +32,13 @@ export class BudgetController {
   createCategory(@Req() req: Request, @Body() dto: CreateBudgetCategoryDto) {
     const companyId = (req as any)?.user?.companyId;
     return this.budgetService.createCategory(dto, companyId);
+  }
+
+  @Patch('categories/:id')
+  @ApiOperation({ summary: '예산 카테고리 수정' })
+  updateCategory(@Req() req: Request, @Param('id') id: string, @Body() dto: UpdateBudgetCategoryDto) {
+    const companyId = (req as any)?.user?.companyId;
+    return this.budgetService.updateCategory(id, dto, companyId);
   }
 
   @Delete('categories/:id')

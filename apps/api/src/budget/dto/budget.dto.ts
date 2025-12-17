@@ -24,6 +24,23 @@ export class CreateBudgetCategoryDto {
   order?: number;
 }
 
+export class UpdateBudgetCategoryDto {
+  @ApiPropertyOptional({ description: '카테고리명' })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @ApiPropertyOptional({ enum: VendorRole, description: '연결된 협력업체 역할' })
+  @IsOptional()
+  @IsEnum(VendorRole)
+  vendorRole?: VendorRole | null;
+
+  @ApiPropertyOptional({ description: '정렬 순서' })
+  @IsOptional()
+  @IsNumber()
+  order?: number;
+}
+
 export class CreateBudgetItemDto {
   @ApiProperty({ description: '카테고리 ID' })
   @IsString()
