@@ -1,0 +1,12 @@
+// apps/api/src/budget/budget.module.ts
+import { Module } from '@nestjs/common';
+import { PrismaModule } from '../prisma/prisma.module';
+import { BudgetController } from './budget.controller';
+import { BudgetService } from './budget.service';
+
+@Module({
+  imports: [PrismaModule],
+  controllers: [BudgetController],
+  providers: [BudgetService],
+})
+export class BudgetModule {}
