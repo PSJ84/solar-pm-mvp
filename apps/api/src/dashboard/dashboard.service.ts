@@ -271,7 +271,7 @@ export class DashboardService {
       dueDate: task.dueDate?.toISOString() || null,
       status: task.status,
       isMandatory: task.isMandatory,
-      stageName: task.projectStage.template.name,
+      stageName: task.projectStage.template?.name ?? task.projectStage.id,
     }));
   }
 
@@ -314,7 +314,7 @@ export class DashboardService {
       dueDate: task.dueDate?.toISOString() || null,
       status: task.status,
       isMandatory: task.isMandatory,
-      stageName: task.projectStage.template.name,
+      stageName: task.projectStage.template?.name ?? task.projectStage.id,
     }));
   }
 
@@ -687,7 +687,7 @@ export class DashboardService {
         dueDate: task.dueDate,
         isMandatory: task.isMandatory,
         project: { id: task.projectStage.project.id, name: task.projectStage.project.name },
-        stage: task.projectStage.template.name,
+        stage: task.projectStage.template?.name ?? task.projectStage.id,
       })),
     };
   }
