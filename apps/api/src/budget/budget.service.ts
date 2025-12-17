@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateBudgetCategoryDto,
   CreateBudgetItemDto,
+  UpdateBudgetCategoryDto,
   UpdateBudgetItemDto,
 } from './dto/budget.dto';
 
@@ -60,7 +61,15 @@ export class BudgetService {
   async getCategories(companyId?: string) {
     const resolvedCompanyId = await this.resolveCompanyId(companyId);
 
-    return this.ensureDefaultCategories(resolvedCompanyId);
+    await this.ensureDefaultCategories(resolvedCompanyId);
+
+    return this.prisma.budgetCategory.findMany({
+      where: { companyId: resolvedCompanyId, deletedAt: null },
+      orderBy: [
+        { order: 'asc' },
+        { name: 'asc' },
+      ],
+    });
   }
 
   async createCategory(dto: CreateBudgetCategoryDto, companyId?: string) {
@@ -82,6 +91,26 @@ export class BudgetService {
     });
   }
 
+  async updateCategory(id: string, dto: UpdateBudgetCategoryDto, companyId?: string) {
+    const resolvedCompanyId = await this.resolveCompanyId(companyId);
+    const category = await this.prisma.budgetCategory.findFirst({
+      where: { id, companyId: resolvedCompanyId, deletedAt: null },
+    });
+
+    if (!category) {
+      throw new NotFoundException('카테고리를 찾을 수 없습니다.');
+    }
+
+    return this.prisma.budgetCategory.update({
+      where: { id },
+      data: {
+        name: dto.name ?? undefined,
+        vendorRole: dto.vendorRole !== undefined ? dto.vendorRole : undefined,
+        order: dto.order ?? undefined,
+      },
+    });
+  }
+
   async deleteCategory(id: string, companyId?: string) {
     const resolvedCompanyId = await this.resolveCompanyId(companyId);
     const category = await this.prisma.budgetCategory.findFirst({
@@ -90,6 +119,10 @@ export class BudgetService {
 
     if (!category) {
       throw new NotFoundException('카테고리를 찾을 수 없습니다.');
+    }
+
+    if (category.isDefault) {
+      throw new BadRequestException('기본 카테고리는 삭제할 수 없습니다.');
     }
 
     return this.prisma.budgetCategory.update({
