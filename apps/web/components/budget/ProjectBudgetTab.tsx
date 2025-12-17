@@ -59,10 +59,20 @@ export function ProjectBudgetTab({ projectId, projectVendors, onToast }: Project
     },
   });
 
+  const resolveVendorForCategory = (categoryId: string) => {
+    const category = categories.find((c) => c.id === categoryId);
+    if (!category?.vendorRole) return null;
+
+    return projectVendors.find((pv) => pv.role === category.vendorRole)?.vendor || null;
+  };
+
   const initializeMutation = useMutation({
-    mutationFn: async () => budgetApi.initializeProjectBudget(projectId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: budgetQueryKey });
+    mutationFn: async () => {
+      const res = await budgetApi.initializeProjectBudget(projectId);
+      return res.data as BudgetProjectResponse;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(budgetQueryKey, data);
       onToast('기본 카테고리를 추가했어요.', 'success');
     },
     onError: () => {
@@ -71,42 +81,135 @@ export function ProjectBudgetTab({ projectId, projectVendors, onToast }: Project
   });
 
   const addItemMutation = useMutation({
-    mutationFn: async (categoryId: string) =>
-      budgetApi.addBudgetItem(projectId, { categoryId, contractAmount: 0, plannedAmount: 0, actualAmount: 0 }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: budgetQueryKey });
+    mutationFn: async (categoryId: string) => {
+      const res = await budgetApi.addBudgetItem(projectId, {
+        categoryId,
+        contractAmount: 0,
+        plannedAmount: 0,
+        actualAmount: 0,
+      });
+      return res.data as BudgetItem;
+    },
+    onMutate: async (categoryId) => {
+      await queryClient.cancelQueries({ queryKey: budgetQueryKey });
+      const previous = queryClient.getQueryData<BudgetProjectResponse>(budgetQueryKey);
+      const category = categories.find((c) => c.id === categoryId) || null;
+      const vendor = resolveVendorForCategory(categoryId);
+      const tempId = `temp-${Date.now()}`;
+
+      const optimisticItem: BudgetItem = {
+        id: tempId,
+        projectId,
+        categoryId,
+        contractAmount: 0,
+        plannedAmount: 0,
+        actualAmount: 0,
+        vendorId: vendor?.id ?? null,
+        category,
+        vendor,
+      };
+
+      queryClient.setQueryData<BudgetProjectResponse>(budgetQueryKey, (prev) => {
+        const base = prev || { items: [] };
+        return { ...base, items: [...(base.items || []), optimisticItem] } as BudgetProjectResponse;
+      });
       setSelectedCategoryId('');
+      return { previous, tempId };
+    },
+    onError: (_error, _categoryId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(budgetQueryKey, context.previous);
+      }
+      onToast('품목을 추가하지 못했어요.', 'error');
+    },
+    onSuccess: (data, _categoryId, context) => {
+      queryClient.setQueryData<BudgetProjectResponse>(budgetQueryKey, (prev) => {
+        if (!prev) return prev;
+        const items = (prev.items || []).map((item) => (item.id === context?.tempId ? { ...item, ...data } : item));
+        const exists = items.some((item) => item.id === data.id);
+        const nextItems = exists ? items : [...items, data];
+        return { ...prev, items: nextItems };
+      });
       onToast('품목을 추가했어요.', 'success');
     },
-    onError: () => {
-      onToast('품목을 추가하지 못했어요.', 'error');
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: budgetQueryKey });
     },
   });
 
   const updateItemMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<BudgetItem> }) =>
-      budgetApi.updateBudgetItem(id, {
+    mutationFn: async ({ id, data }: { id: string; data: Partial<BudgetItem> }) => {
+      const res = await budgetApi.updateBudgetItem(id, {
         contractAmount: data.contractAmount,
         plannedAmount: data.plannedAmount,
         actualAmount: data.actualAmount,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: budgetQueryKey });
+      });
+      return res.data as BudgetItem;
+    },
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: budgetQueryKey });
+      const previous = queryClient.getQueryData<BudgetProjectResponse>(budgetQueryKey);
+      queryClient.setQueryData<BudgetProjectResponse>(budgetQueryKey, (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          items: prev.items.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  contractAmount: data.contractAmount ?? item.contractAmount,
+                  plannedAmount: data.plannedAmount ?? item.plannedAmount,
+                  actualAmount: data.actualAmount ?? item.actualAmount,
+                }
+              : item,
+          ),
+        };
+      });
+      return { previous };
+    },
+    onError: (_error, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(budgetQueryKey, context.previous);
+      }
+      onToast('금액을 저장하지 못했어요.', 'error');
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData<BudgetProjectResponse>(budgetQueryKey, (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          items: prev.items.map((item) => (item.id === data.id ? { ...item, ...data } : item)),
+        };
+      });
       onToast('금액을 저장했어요.', 'success');
     },
-    onError: () => {
-      onToast('금액을 저장하지 못했어요.', 'error');
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: budgetQueryKey });
     },
   });
 
   const deleteItemMutation = useMutation({
     mutationFn: async (itemId: string) => budgetApi.deleteBudgetItem(itemId),
+    onMutate: async (itemId: string) => {
+      await queryClient.cancelQueries({ queryKey: budgetQueryKey });
+      const previous = queryClient.getQueryData<BudgetProjectResponse>(budgetQueryKey);
+      queryClient.setQueryData<BudgetProjectResponse>(budgetQueryKey, (prev) => {
+        if (!prev) return prev;
+        return { ...prev, items: prev.items.filter((item) => item.id !== itemId) };
+      });
+      return { previous };
+    },
+    onError: (_error, _payload, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(budgetQueryKey, context.previous);
+      }
+      onToast('품목을 삭제하지 못했어요.', 'error');
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: budgetQueryKey });
       onToast('품목을 삭제했어요.', 'success');
     },
-    onError: () => {
-      onToast('품목을 삭제하지 못했어요.', 'error');
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: budgetQueryKey });
     },
   });
 

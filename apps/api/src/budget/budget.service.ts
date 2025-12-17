@@ -52,6 +52,34 @@ export class BudgetService {
     return project;
   }
 
+  private async resolveVendorForCategory(projectId: string, vendorRole?: VendorRole | null) {
+    if (!vendorRole) return null;
+
+    const vendor = await this.prisma.projectVendor.findFirst({
+      where: { projectId, role: vendorRole, deletedAt: null },
+      include: { vendor: true },
+    });
+
+    return vendor?.vendor ?? null;
+  }
+
+  private mapBudgetItem(
+    item: Prisma.ProjectBudgetItemGetPayload<{ include: { category: true; vendorOverride: true } }>,
+    vendor: Prisma.VendorGetPayload<{}> | null,
+  ) {
+    return {
+      id: item.id,
+      projectId: item.projectId,
+      categoryId: item.categoryId,
+      contractAmount: this.toNumber(item.contractAmount),
+      plannedAmount: this.toNumber(item.plannedAmount),
+      actualAmount: this.toNumber(item.actualAmount),
+      vendorId: vendor?.id ?? null,
+      category: item.category,
+      vendor,
+    };
+  }
+
   private toNumber(value: Prisma.Decimal | number | null | undefined): number {
     if (value === null || value === undefined) return 0;
     if (typeof value === 'number') return value;
@@ -229,7 +257,7 @@ export class BudgetService {
       throw new BadRequestException('이미 추가된 카테고리입니다.');
     }
 
-    return this.prisma.projectBudgetItem.create({
+    const created = await this.prisma.projectBudgetItem.create({
       data: {
         projectId: project.id,
         categoryId: dto.categoryId,
@@ -240,8 +268,12 @@ export class BudgetService {
         actualAmount:
           dto.actualAmount !== undefined ? new Prisma.Decimal(dto.actualAmount) : new Prisma.Decimal(0),
       },
-      include: { category: true },
+      include: { category: true, vendorOverride: true },
     });
+
+    const vendor = created.vendorOverride ?? (await this.resolveVendorForCategory(project.id, created.category.vendorRole));
+
+    return this.mapBudgetItem(created, vendor);
   }
 
   async updateBudgetItem(id: string, dto: UpdateBudgetItemDto) {
@@ -251,7 +283,7 @@ export class BudgetService {
       throw new NotFoundException('예산 품목을 찾을 수 없습니다.');
     }
 
-    return this.prisma.projectBudgetItem.update({
+    const updated = await this.prisma.projectBudgetItem.update({
       where: { id },
       data: {
         contractAmount:
@@ -261,6 +293,10 @@ export class BudgetService {
       },
       include: { category: true, vendorOverride: true },
     });
+
+    const vendor = updated.vendorOverride ?? (await this.resolveVendorForCategory(updated.projectId, updated.category.vendorRole));
+
+    return this.mapBudgetItem(updated, vendor);
   }
 
   async deleteBudgetItem(id: string) {
