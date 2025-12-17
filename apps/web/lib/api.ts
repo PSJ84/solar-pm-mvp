@@ -2,12 +2,14 @@
 import type { TemplateDetailDto, TemplateListItemDto } from '../../../packages/shared/src/types/template.types';
 import type { MyWorkTaskDto } from '@/types/dashboard';
 import { api } from './api/client';
+import { budgetApi } from './api/budget';
 import { getTomorrowDashboard } from './api/dashboard';
 import { getMyTasks } from './api/tasks';
 
 export { api };
 export { getTomorrowDashboard } from './api/dashboard';
 export { getMyTasks } from './api/tasks';
+export { budgetApi } from './api/budget';
 
 // ===========================
 // 타입 정의
