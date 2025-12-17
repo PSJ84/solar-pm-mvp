@@ -6,33 +6,90 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding database...');
 
-  // 1. 회사 생성
-  const company = await prisma.company.create({
-    data: {
-      name: '솔라에너지 주식회사',
-    },
+  // 1. 회사 생성 (없으면 생성, 있으면 첫 번째 회사 사용)
+  let company = await prisma.company.findFirst();
+  if (!company) {
+    company = await prisma.company.create({
+      data: {
+        name: '솔라에너지 주식회사',
+      },
+    });
+    console.log('✅ Company created:', company.name);
+  } else {
+    console.log('ℹ️ Existing company found:', company.name);
+  }
+
+  // Budget 기본 카테고리 생성 (모든 회사 기준)
+  const companies = await prisma.company.findMany({ select: { id: true, name: true } });
+
+  const defaultBudgetCategories = [
+    { name: '구조물 자재/시공', vendorRole: 'structure', isDefault: true, order: 1 },
+    { name: '전기공사', vendorRole: 'electrical', isDefault: true, order: 2 },
+    { name: '전기설계', vendorRole: 'electrical_design', isDefault: true, order: 3 },
+    { name: '구조검토', vendorRole: 'structural_review', isDefault: true, order: 4 },
+    { name: 'EPC', vendorRole: 'epc', isDefault: true, order: 5 },
+    { name: '유지보수', vendorRole: 'om', isDefault: true, order: 6 },
+    { name: '금융비용', vendorRole: 'finance', isDefault: true, order: 7 },
+    { name: '기타', vendorRole: 'other', isDefault: true, order: 8 },
+  ];
+
+  for (const targetCompany of companies) {
+    await prisma.budgetCategory.createMany({
+      data: defaultBudgetCategories.map((category) => ({ ...category, companyId: targetCompany.id })),
+      skipDuplicates: true,
+    });
+    console.log(`✅ Default budget categories ensured for company: ${targetCompany.name}`);
+  }
+
+  // Budget 기본 카테고리 생성
+  const defaultBudgetCategories = [
+    { name: '구조물 자재/시공', vendorRole: 'structure', isDefault: true, order: 1 },
+    { name: '전기공사', vendorRole: 'electrical', isDefault: true, order: 2 },
+    { name: '전기설계', vendorRole: 'electrical_design', isDefault: true, order: 3 },
+    { name: '구조검토', vendorRole: 'structural_review', isDefault: true, order: 4 },
+    { name: 'EPC', vendorRole: 'epc', isDefault: true, order: 5 },
+    { name: '유지보수', vendorRole: 'om', isDefault: true, order: 6 },
+    { name: '금융비용', vendorRole: 'finance', isDefault: true, order: 7 },
+    { name: '기타', vendorRole: 'other', isDefault: true, order: 8 },
+  ];
+
+  await prisma.budgetCategory.createMany({
+    data: defaultBudgetCategories.map((category) => ({ ...category, companyId: company.id })),
+    skipDuplicates: true,
   });
-  console.log('✅ Company created:', company.name);
+  console.log('✅ Default budget categories created');
 
   // 2. 사용자 생성
-  const admin = await prisma.user.create({
-    data: {
-      email: 'admin@solar-pm.com',
-      name: '관리자',
-      role: 'admin',
-      companyId: company.id,
-    },
-  });
+  const adminExists = await prisma.user.findFirst({ where: { email: 'admin@solar-pm.com' } });
+  if (!adminExists) {
+    const admin = await prisma.user.create({
+      data: {
+        email: 'admin@solar-pm.com',
+        name: '관리자',
+        role: 'admin',
+        companyId: company.id,
+      },
+    });
+    console.log('✅ Admin user created:', admin.name);
+  }
 
-  const pm = await prisma.user.create({
-    data: {
-      email: 'pm@solar-pm.com',
-      name: '김태양 PM',
-      role: 'manager',
-      companyId: company.id,
-    },
-  });
-  console.log('✅ Users created:', admin.name, pm.name);
+  const pmExists = await prisma.user.findFirst({ where: { email: 'pm@solar-pm.com' } });
+  let pm = pmExists;
+  if (!pm) {
+    pm = await prisma.user.create({
+      data: {
+        email: 'pm@solar-pm.com',
+        name: '김태양 PM',
+        role: 'manager',
+        companyId: company.id,
+      },
+    });
+    console.log('✅ PM user created:', pm.name);
+  }
+
+  if (!pm) {
+    throw new Error('PM user could not be ensured for seeding');
+  }
 
   // 3. 단계 템플릿 생성 (태양광 인허가 워크플로우)
   const stageTemplates = [
