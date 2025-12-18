@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -25,6 +25,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { debounce } from 'lodash';
 import { cn, STATUS_LABELS, formatRelativeTime, getProgressColor } from '@/lib/utils';
 import { projectsApi, stagesApi, tasksApi, templatesApi, vendorsApi } from '@/lib/api';
 import { ChecklistPanel } from '@/components/checklist/ChecklistPanel';
@@ -662,6 +663,40 @@ export default function ProjectDetailPage() {
     },
   });
 
+  // Debounced task field updates for better performance
+  // Batches rapid changes (e.g., typing, toggling) into single API calls
+  const debouncedUpdateTaskFields = useMemo(
+    () =>
+      debounce(
+        (params: { taskId: string; stageId: string; data: Partial<Task> }) => {
+          updateTaskFields(params);
+        },
+        500, // 500ms delay - balances responsiveness with API call reduction
+      ),
+    [updateTaskFields],
+  );
+
+  // Cleanup debounced function on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      debouncedUpdateTaskFields.cancel();
+    };
+  }, [debouncedUpdateTaskFields]);
+
+  // Optimistic update helper - provides instant UI feedback while debouncing API calls
+  const updateTaskWithOptimisticUI = useCallback(
+    (taskId: string, stageId: string, updates: Partial<Task>) => {
+      // Immediate cache update for instant visual feedback
+      updateStageTasksInCache(stageId, (tasks) =>
+        tasks.map((task) => (task.id === taskId ? { ...task, ...updates } : task)),
+      );
+
+      // Debounced API call - batches rapid changes
+      debouncedUpdateTaskFields({ taskId, stageId, data: updates });
+    },
+    [debouncedUpdateTaskFields, updateStageTasksInCache],
+  );
+
   const { mutate: saveStageDates, isPending: isSavingStageDates } = useMutation({
     mutationFn: async ({
       stageId,
@@ -855,12 +890,9 @@ export default function ProjectDetailPage() {
       nextValue = value;
     }
 
-    updateTaskFields({
-      taskId: task.id,
-      stageId: activeStage.id,
-      data: {
-        [field]: nextValue,
-      },
+    // Use optimistic update with debouncing for better performance
+    updateTaskWithOptimisticUI(task.id, activeStage.id, {
+      [field]: nextValue,
     });
   };
 
@@ -1891,10 +1923,8 @@ export default function ProjectDetailPage() {
                                 type="checkbox"
                                 checked={task.notificationEnabled ?? false}
                                 onChange={(e) =>
-                                  updateTaskFields({
-                                    taskId: task.id,
-                                    stageId: activeStage.id,
-                                    data: { notificationEnabled: e.target.checked },
+                                  updateTaskWithOptimisticUI(task.id, activeStage.id, {
+                                    notificationEnabled: e.target.checked,
                                   })
                                 }
                                 className="h-4 w-4 rounded border-slate-300 text-blue-500"
