@@ -230,6 +230,10 @@ export interface GanttStage {
   name: string;
   order: number;
   tasks: GanttTask[];
+  // Stage date fields
+  startDate: string | null;
+  receivedDate: string | null;
+  completedDate: string | null;
 }
 
 export interface GanttData {
