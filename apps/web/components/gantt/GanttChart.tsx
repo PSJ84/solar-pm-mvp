@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { addDays, subDays, format } from 'date-fns';
+import { format } from 'date-fns';
 import type { GanttData } from '@/types';
 import { GanttTimeline } from './GanttTimeline';
 import { GanttBar } from './GanttBar';
@@ -21,11 +21,13 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
   const TODAY = useMemo(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    console.log('[GanttChart] TODAY constant initialized:', {
-      date: today.toISOString().split('T')[0],
-      localString: today.toLocaleString('ko-KR'),
-      timestamp: today.getTime()
-    });
+    const formatLocalDate = (date: Date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+    console.log('[GanttChart] TODAY constant initialized:', formatLocalDate(today));
     return today;
   }, []); // Empty dependency array - never recalculates
 
@@ -47,11 +49,6 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
     // 로컬 자정으로 정규화 (타임존 문제 방지)
     const date = new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate());
     date.setDate(date.getDate() - 7); // 시작일 7일 전부터
-    console.log('[GanttChart] viewportStart initialized:', {
-      original: dateRange.min,
-      normalized: date.toISOString().split('T')[0],
-      localString: date.toLocaleString('ko-KR')
-    });
     return date;
   });
 
@@ -60,30 +57,48 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
     // 로컬 자정으로 정규화 (타임존 문제 방지)
     const date = new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate());
     date.setDate(date.getDate() + 14); // 종료일 14일 후까지
-    console.log('[GanttChart] viewportEnd initialized:', {
-      original: dateRange.max,
-      normalized: date.toISOString().split('T')[0],
-      localString: date.toLocaleString('ko-KR')
-    });
     return date;
   });
 
   // 날짜 네비게이션 함수들
+  // date-fns 제거: 수동으로 날짜 계산 (타임존 문제 방지)
   const shiftDays = (days: number) => {
-    setViewportStart(prev => addDays(prev, days));
-    setViewportEnd(prev => addDays(prev, days));
+    setViewportStart(prev => {
+      const newDate = new Date(prev);
+      newDate.setDate(newDate.getDate() + days);
+      return newDate;
+    });
+    setViewportEnd(prev => {
+      const newDate = new Date(prev);
+      newDate.setDate(newDate.getDate() + days);
+      return newDate;
+    });
   };
 
   const goToToday = () => {
     const range = getDaysBetween(viewportStart, viewportEnd);
-    setViewportStart(subDays(TODAY, Math.floor(range / 3)));
-    setViewportEnd(addDays(TODAY, Math.floor(range * 2 / 3)));
+
+    const newStart = new Date(TODAY);
+    newStart.setDate(newStart.getDate() - Math.floor(range / 3));
+
+    const newEnd = new Date(TODAY);
+    newEnd.setDate(newEnd.getDate() + Math.floor(range * 2 / 3));
+
+    setViewportStart(newStart);
+    setViewportEnd(newEnd);
   };
 
   const totalDays = getDaysBetween(viewportStart, viewportEnd) + 1;
   const totalWidth = totalDays * dayWidth;
 
-  // Debug logging
+  // Debug logging - 로컬 날짜 포맷 함수
+  const formatLocalDate = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
   const normalizeToMidnight = (date: Date) => {
     const normalized = new Date(date);
     normalized.setHours(0, 0, 0, 0);
@@ -97,14 +112,12 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
   const daysDiff = Math.round(diffMs / MS_PER_DAY);
 
   console.log('[GanttChart] Render:', {
-    TODAY_date: TODAY.toISOString().split('T')[0],
-    TODAY_local: TODAY.toLocaleString('ko-KR'),
-    viewportStart_date: viewportStart.toISOString().split('T')[0],
-    viewportStart_local: viewportStart.toLocaleString('ko-KR'),
-    viewportEnd_date: viewportEnd.toISOString().split('T')[0],
+    TODAY: formatLocalDate(TODAY),
+    viewportStart: formatLocalDate(viewportStart),
+    viewportEnd: formatLocalDate(viewportEnd),
     diffMs,
     daysDiff,
-    todayPosition: daysDiff * dayWidth
+    todayPosition: `${daysDiff * dayWidth}px`
   });
 
   // 날짜 있는 Task와 없는 Task 분리

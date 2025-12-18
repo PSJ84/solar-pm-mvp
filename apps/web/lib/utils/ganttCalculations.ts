@@ -48,14 +48,20 @@ export function getTodayPosition(
   const diffMs = todayNormalized.getTime() - viewStart.getTime();
   const daysDiff = Math.round(diffMs / MS_PER_DAY);
 
+  // 로컬 날짜 포맷 함수
+  const formatLocalDate = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
   console.log('[getTodayPosition]', {
-    viewportStart: viewStart.toISOString().split('T')[0],
-    today: todayNormalized.toISOString().split('T')[0],
-    viewStartLocal: viewStart.toLocaleString('ko-KR'),
-    todayLocal: todayNormalized.toLocaleString('ko-KR'),
+    viewportStart: formatLocalDate(viewStart),
+    today: formatLocalDate(todayNormalized),
     diffMs,
     daysDiff,
-    position: daysDiff * dayWidth
+    position: `${daysDiff * dayWidth}px`
   });
 
   return daysDiff * dayWidth;
