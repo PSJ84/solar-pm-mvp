@@ -17,12 +17,12 @@ export const GANTT_TEXT_COLORS = {
 } as const;
 
 export const GANTT_STAGE_COLORS = {
-  bar: 'bg-indigo-100 border-indigo-300',
-  barHover: 'bg-indigo-200 border-indigo-400',
+  bar: 'bg-indigo-300 border-indigo-400',
+  barHover: 'bg-indigo-400 border-indigo-500',
   text: 'text-indigo-800',
 } as const;
 
 export const GANTT_MILESTONE_COLORS = {
-  receivedDate: 'bg-amber-500 border-amber-600',
-  text: 'text-amber-900',
+  receivedDate: 'bg-orange-500 border-orange-600',
+  text: 'text-orange-900',
 } as const;

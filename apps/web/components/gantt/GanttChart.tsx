@@ -1,7 +1,9 @@
 // apps/web/components/gantt/GanttChart.tsx
 'use client';
 
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { addDays, subDays, format } from 'date-fns';
 import type { GanttData } from '@/types';
 import { GanttTimeline } from './GanttTimeline';
 import { GanttBar } from './GanttBar';
@@ -26,18 +28,31 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
 
   const { stages, dateRange } = data;
 
-  // 날짜 범위에 여유 추가
-  const viewportStart = useMemo(() => {
+  // 날짜 범위에 여유 추가 - useState로 변경하여 네비게이션 가능하게
+  const [viewportStart, setViewportStart] = useState(() => {
     const date = new Date(dateRange.min);
     date.setDate(date.getDate() - 7); // 시작일 7일 전부터
     return date;
-  }, [dateRange.min]);
+  });
 
-  const viewportEnd = useMemo(() => {
+  const [viewportEnd, setViewportEnd] = useState(() => {
     const date = new Date(dateRange.max);
     date.setDate(date.getDate() + 14); // 종료일 14일 후까지
     return date;
-  }, [dateRange.max]);
+  });
+
+  // 날짜 네비게이션 함수들
+  const shiftDays = (days: number) => {
+    setViewportStart(prev => addDays(prev, days));
+    setViewportEnd(prev => addDays(prev, days));
+  };
+
+  const goToToday = () => {
+    const range = getDaysBetween(viewportStart, viewportEnd);
+    const today = new Date();
+    setViewportStart(subDays(today, Math.floor(range / 3)));
+    setViewportEnd(addDays(today, Math.floor(range * 2 / 3)));
+  };
 
   const totalDays = getDaysBetween(viewportStart, viewportEnd) + 1;
   const totalWidth = totalDays * dayWidth;
@@ -61,6 +76,35 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
 
   return (
     <div className="space-y-4">
+      {/* 날짜 네비게이션 컨트롤 */}
+      <div className="flex items-center justify-between mb-4 px-4">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => shiftDays(-14)}
+            className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50 flex items-center gap-1"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            이전 2주
+          </button>
+          <button
+            onClick={goToToday}
+            className="px-4 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            오늘
+          </button>
+          <button
+            onClick={() => shiftDays(14)}
+            className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50 flex items-center gap-1"
+          >
+            다음 2주
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="text-sm text-gray-600">
+          {format(viewportStart, 'yyyy년 M월 d일')} ~ {format(viewportEnd, 'yyyy년 M월 d일')}
+        </div>
+      </div>
+
       <GanttLegend />
 
       {/* 날짜 있는 Task들 - 간트 차트 */}
