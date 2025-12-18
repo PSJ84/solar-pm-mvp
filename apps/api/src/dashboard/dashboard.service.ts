@@ -1,5 +1,5 @@
 // apps/api/src/dashboard/dashboard.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -11,6 +11,11 @@ import {
 import { MyWorkTab, MyWorkTaskDto } from './dto/my-work.dto';
 import { TaskSummaryDto, TomorrowDashboardDto } from './dto/tomorrow-dashboard.dto';
 import { TaskStatus } from '../tasks/dto/task.dto';
+// ✅ [API Consolidation] 통합 데이터 조회를 위한 서비스 import
+import { ProjectsService } from '../projects/projects.service';
+import { VendorsService } from '../vendors/vendors.service';
+import { TemplatesService } from '../templates/templates.service';
+import { BudgetService } from '../budget/budget.service';
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const KST_OFFSET_MINUTES = 9 * 60;
@@ -51,7 +56,15 @@ const calcDDay = (dueDate: Date | null): number | null => {
 
 @Injectable()
 export class DashboardService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    // ✅ [API Consolidation] 통합 데이터 조회를 위한 서비스 주입
+    @Inject(forwardRef(() => ProjectsService))
+    private projectsService: ProjectsService,
+    private vendorsService: VendorsService,
+    private templatesService: TemplatesService,
+    private budgetService: BudgetService,
+  ) {}
 
   private buildTaskSelect(includeNotification: boolean) {
     const select = {
@@ -202,18 +215,36 @@ export class DashboardService {
 
   /**
    * [v1.1] 대시보드 통합 Summary API
+   * [v1.2] API Consolidation - projects, vendors, templates, budgetCategories 추가
    */
   async getFullSummary(userId?: string, companyId?: string): Promise<DashboardSummaryDto> {
     const resolvedCompanyId = await this.resolveCompanyId(companyId);
 
-    const [todayTasks, upcoming7Days, expiringDocuments, riskProjects, statsBase] =
-      await Promise.all([
-        this.getTodayTasksForSummary(userId, resolvedCompanyId),
-        this.getUpcoming7DaysTasksForSummary(userId, resolvedCompanyId),
-        this.getExpiringDocumentsForSummary(resolvedCompanyId),
-        this.getRiskProjectsForSummary(resolvedCompanyId),
-        this.getStatsForSummary(userId, resolvedCompanyId), // ✅ 여기서 riskProjects 다시 계산 안 함
-      ]);
+    // ✅ [API Consolidation] 기존 데이터 + 전역 데이터를 병렬 조회
+    const [
+      todayTasks,
+      upcoming7Days,
+      expiringDocuments,
+      riskProjects,
+      statsBase,
+      projects,
+      myWorkToday,
+      vendors,
+      templates,
+      budgetCategories,
+    ] = await Promise.all([
+      this.getTodayTasksForSummary(userId, resolvedCompanyId),
+      this.getUpcoming7DaysTasksForSummary(userId, resolvedCompanyId),
+      this.getExpiringDocumentsForSummary(resolvedCompanyId),
+      this.getRiskProjectsForSummary(resolvedCompanyId),
+      this.getStatsForSummary(userId, resolvedCompanyId),
+      // ✅ 전역 데이터 조회 (대시보드 진입시 필요한 모든 데이터)
+      this.projectsService.findAll(resolvedCompanyId).catch(() => []),
+      this.getMyWork({ userId: userId || '', companyId: resolvedCompanyId, tab: 'today' }).catch(() => []),
+      this.vendorsService.findAll().catch(() => []),
+      this.templatesService.findAll(resolvedCompanyId).catch(() => []),
+      this.budgetService.getCategories(resolvedCompanyId).catch(() => []),
+    ]);
 
     const stats: DashboardSummaryDto['stats'] = {
       ...statsBase,
@@ -227,6 +258,12 @@ export class DashboardService {
       expiringDocuments,
       riskProjects,
       stats,
+      // ✅ [API Consolidation] 전역 데이터 추가
+      projects,
+      myWorkToday,
+      vendors,
+      templates,
+      budgetCategories,
     };
   }
 

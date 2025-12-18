@@ -60,6 +60,12 @@ export interface DashboardFullSummary {
     todayDueCount: number;
     riskProjectCount: number;
   };
+  // ✅ [API Consolidation] 통합 데이터
+  projects?: any[];
+  myWorkToday?: MyWorkTaskDto[];
+  vendors?: any[];
+  templates?: any[];
+  budgetCategories?: any[];
 }
 
 // ===========================
