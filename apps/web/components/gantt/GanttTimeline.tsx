@@ -1,7 +1,6 @@
 // apps/web/components/gantt/GanttTimeline.tsx
 'use client';
 
-import { startOfDay } from 'date-fns';
 import { generateMonthHeaders, getDaysBetween, getTodayPosition } from '@/lib/utils/ganttCalculations';
 
 interface GanttTimelineProps {
@@ -20,8 +19,11 @@ export function GanttTimeline({ startDate, endDate, dayWidth, today }: GanttTime
 
   // Debug logging
   console.log('[GanttTimeline] Today line:', {
-    today: today.toISOString().split('T')[0],
-    startDate: startDate.toISOString().split('T')[0],
+    today_date: today.toISOString().split('T')[0],
+    today_local: today.toLocaleString('ko-KR'),
+    startDate_date: startDate.toISOString().split('T')[0],
+    startDate_local: startDate.toLocaleString('ko-KR'),
+    endDate_date: endDate.toISOString().split('T')[0],
     showTodayLine,
     todayPosition: `${todayPosition}px`
   });
