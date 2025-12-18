@@ -17,22 +17,6 @@ export function GanttTimeline({ startDate, endDate, dayWidth, today }: GanttTime
     ? getTodayPosition(startDate, today, dayWidth)
     : 0;
 
-  // Debug logging - 로컬 날짜 포맷
-  const formatLocalDate = (date: Date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  };
-
-  console.log('[GanttTimeline] Today line:', {
-    today: formatLocalDate(today),
-    startDate: formatLocalDate(startDate),
-    endDate: formatLocalDate(endDate),
-    showTodayLine,
-    todayPosition: `${todayPosition}px`
-  });
-
   return (
     <div className="relative">
       {/* 월 헤더 */}

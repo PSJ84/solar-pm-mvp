@@ -20,15 +20,7 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
   // Define TODAY as a constant - calculated ONCE on mount
   const TODAY = useMemo(() => {
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const formatLocalDate = (date: Date) => {
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, '0');
-      const d = String(date.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    };
-    console.log('[GanttChart] TODAY constant initialized:', formatLocalDate(today));
-    return today;
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
   }, []); // Empty dependency array - never recalculates
 
   // Early return with null check
@@ -63,62 +55,29 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
   // 날짜 네비게이션 함수들
   // date-fns 제거: 수동으로 날짜 계산 (타임존 문제 방지)
   const shiftDays = (days: number) => {
-    setViewportStart(prev => {
-      const newDate = new Date(prev);
-      newDate.setDate(newDate.getDate() + days);
-      return newDate;
-    });
-    setViewportEnd(prev => {
-      const newDate = new Date(prev);
-      newDate.setDate(newDate.getDate() + days);
-      return newDate;
-    });
+    setViewportStart(prev =>
+      new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + days)
+    );
+    setViewportEnd(prev =>
+      new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + days)
+    );
   };
 
   const goToToday = () => {
     const range = getDaysBetween(viewportStart, viewportEnd);
+    const offsetBefore = Math.floor(range / 3);
+    const offsetAfter = range - offsetBefore;
 
-    const newStart = new Date(TODAY);
-    newStart.setDate(newStart.getDate() - Math.floor(range / 3));
-
-    const newEnd = new Date(TODAY);
-    newEnd.setDate(newEnd.getDate() + Math.floor(range * 2 / 3));
-
-    setViewportStart(newStart);
-    setViewportEnd(newEnd);
+    setViewportStart(
+      new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() - offsetBefore)
+    );
+    setViewportEnd(
+      new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() + offsetAfter)
+    );
   };
 
   const totalDays = getDaysBetween(viewportStart, viewportEnd) + 1;
   const totalWidth = totalDays * dayWidth;
-
-  // Debug logging - 로컬 날짜 포맷 함수
-  const formatLocalDate = (date: Date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  };
-
-  const normalizeToMidnight = (date: Date) => {
-    const normalized = new Date(date);
-    normalized.setHours(0, 0, 0, 0);
-    return normalized;
-  };
-
-  const viewStartNorm = normalizeToMidnight(viewportStart);
-  const todayNorm = normalizeToMidnight(TODAY);
-  const MS_PER_DAY = 1000 * 60 * 60 * 24;
-  const diffMs = todayNorm.getTime() - viewStartNorm.getTime();
-  const daysDiff = Math.round(diffMs / MS_PER_DAY);
-
-  console.log('[GanttChart] Render:', {
-    TODAY: formatLocalDate(TODAY),
-    viewportStart: formatLocalDate(viewportStart),
-    viewportEnd: formatLocalDate(viewportEnd),
-    diffMs,
-    daysDiff,
-    todayPosition: `${daysDiff * dayWidth}px`
-  });
 
   // 날짜 있는 Task와 없는 Task 분리
   const tasksWithDates = stages.flatMap(stage =>
