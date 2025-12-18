@@ -31,13 +31,17 @@ export function useGanttData(project: Project | null): GanttData | null {
         name: stage.template?.name ?? stage.id,
         order: stage.template?.order ?? 0,
         tasks: ganttTasks,
+        // Include stage dates
+        startDate: stage.startDate || null,
+        receivedDate: stage.receivedDate || null,
+        completedDate: stage.completedDate || null,
       };
     });
 
-    const allDates = ganttStages
-      .flatMap(s => s.tasks)
-      .flatMap(t => [t.startDate, t.dueDate])
-      .filter(Boolean) as string[];
+    const allDates = [
+      ...ganttStages.flatMap(s => s.tasks).flatMap(t => [t.startDate, t.dueDate]),
+      ...ganttStages.flatMap(s => [s.startDate, s.completedDate]),
+    ].filter(Boolean) as string[];
 
     const dateRange = {
       min: allDates.length > 0

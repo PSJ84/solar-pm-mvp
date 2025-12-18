@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import type { GanttData } from '@/types';
 import { GanttTimeline } from './GanttTimeline';
 import { GanttBar } from './GanttBar';
+import { GanttStageBar } from './GanttStageBar';
 import { GanttLegend } from './GanttLegend';
 import { getDaysBetween } from '@/lib/utils/ganttCalculations';
 
@@ -100,6 +101,10 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
                     <div className="bg-slate-100 border-b border-gray-300 font-semibold py-2 px-4 text-sm">
                       {stage.name}
                     </div>
+                    {/* Stage Bar 행 */}
+                    <div className="bg-slate-50 border-b border-gray-200 py-1.5 px-4 text-xs text-gray-600 italic">
+                      단계 일정
+                    </div>
                     {/* Task 목록 */}
                     {stageTasks.map(task => (
                       <div
@@ -145,6 +150,14 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
                     <div key={stage.id}>
                       {/* Stage 헤더 높이 */}
                       <div className="h-8 border-b border-gray-300" />
+                      {/* Stage Bar 행 */}
+                      <div className="h-6 border-b border-gray-200 relative flex items-center px-2">
+                        <GanttStageBar
+                          stage={stage}
+                          viewportStart={viewportStart}
+                          dayWidth={dayWidth}
+                        />
+                      </div>
                       {/* Task 바들 */}
                       {stageTasks.map(task => (
                         <div
