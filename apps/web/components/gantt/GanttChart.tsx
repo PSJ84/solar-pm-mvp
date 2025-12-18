@@ -1,0 +1,203 @@
+// apps/web/components/gantt/GanttChart.tsx
+'use client';
+
+import { useMemo } from 'react';
+import type { GanttData } from '@/types';
+import { GanttTimeline } from './GanttTimeline';
+import { GanttBar } from './GanttBar';
+import { GanttLegend } from './GanttLegend';
+import { getDaysBetween } from '@/lib/utils/ganttCalculations';
+
+interface GanttChartProps {
+  data: GanttData;
+  dayWidth?: number;
+}
+
+export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
+  const { stages, dateRange } = data;
+
+  // 날짜 범위에 여유 추가
+  const viewportStart = useMemo(() => {
+    const date = new Date(dateRange.min);
+    date.setDate(date.getDate() - 7); // 시작일 7일 전부터
+    return date;
+  }, [dateRange.min]);
+
+  const viewportEnd = useMemo(() => {
+    const date = new Date(dateRange.max);
+    date.setDate(date.getDate() + 14); // 종료일 14일 후까지
+    return date;
+  }, [dateRange.max]);
+
+  const totalDays = getDaysBetween(viewportStart, viewportEnd) + 1;
+  const totalWidth = totalDays * dayWidth;
+
+  // 날짜 있는 Task와 없는 Task 분리
+  const tasksWithDates = stages.flatMap(stage =>
+    stage.tasks.filter(task => task.startDate && task.dueDate)
+  );
+
+  const tasksWithoutDates = stages.flatMap(stage =>
+    stage.tasks.filter(task => !task.startDate || !task.dueDate)
+  );
+
+  if (tasksWithDates.length === 0 && tasksWithoutDates.length === 0) {
+    return (
+      <div className="text-center py-12 text-gray-500">
+        표시할 작업이 없습니다.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <GanttLegend />
+
+      {/* 날짜 있는 Task들 - 간트 차트 */}
+      {tasksWithDates.length > 0 && (
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          {/* 헤더: 프로젝트 이름과 타임라인 */}
+          <div className="flex bg-white border-b border-gray-200 sticky top-0 z-20">
+            {/* 왼쪽: Task 이름 영역 */}
+            <div className="w-80 flex-shrink-0 bg-slate-100 border-r border-gray-300">
+              <div className="h-16 flex items-center justify-center font-bold text-gray-700 border-b-2 border-gray-300">
+                작업
+              </div>
+              <div className="h-8 border-b border-gray-300" />
+            </div>
+            {/* 오른쪽: 타임라인 */}
+            <div className="flex-1 overflow-x-auto">
+              <GanttTimeline
+                startDate={viewportStart}
+                endDate={viewportEnd}
+                dayWidth={dayWidth}
+              />
+            </div>
+          </div>
+
+          {/* 본문: Stage별 Task 목록 */}
+          <div className="flex">
+            {/* 왼쪽: Task 이름 영역 */}
+            <div className="w-80 flex-shrink-0 bg-white border-r border-gray-300">
+              {stages.map(stage => {
+                const stageTasks = stage.tasks.filter(
+                  task => task.startDate && task.dueDate
+                );
+                if (stageTasks.length === 0) return null;
+
+                return (
+                  <div key={stage.id}>
+                    {/* Stage 헤더 */}
+                    <div className="bg-slate-100 border-b border-gray-300 font-semibold py-2 px-4 text-sm">
+                      {stage.name}
+                    </div>
+                    {/* Task 목록 */}
+                    {stageTasks.map(task => (
+                      <div
+                        key={task.id}
+                        className="py-2 px-4 border-b border-gray-200 hover:bg-slate-50 text-sm truncate"
+                        title={task.title}
+                      >
+                        {task.title}
+                        {task.assignee && (
+                          <span className="ml-2 text-xs text-gray-500">
+                            ({task.assignee.name})
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 오른쪽: 간트 바 영역 */}
+            <div className="flex-1 overflow-x-auto">
+              <div className="relative" style={{ width: `${totalWidth}px` }}>
+                {/* 배경 그리드 */}
+                <div className="absolute inset-0 flex">
+                  {Array.from({ length: totalDays }).map((_, idx) => (
+                    <div
+                      key={idx}
+                      className="border-r border-gray-100"
+                      style={{ width: `${dayWidth}px` }}
+                    />
+                  ))}
+                </div>
+
+                {/* Stage별 간트 바 */}
+                {stages.map(stage => {
+                  const stageTasks = stage.tasks.filter(
+                    task => task.startDate && task.dueDate
+                  );
+                  if (stageTasks.length === 0) return null;
+
+                  return (
+                    <div key={stage.id}>
+                      {/* Stage 헤더 높이 */}
+                      <div className="h-8 border-b border-gray-300" />
+                      {/* Task 바들 */}
+                      {stageTasks.map(task => (
+                        <div
+                          key={task.id}
+                          className="h-10 border-b border-gray-200 relative"
+                        >
+                          <GanttBar
+                            task={task}
+                            viewportStart={viewportStart}
+                            dayWidth={dayWidth}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 날짜 없는 Task들 */}
+      {tasksWithoutDates.length > 0 && (
+        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+          <h3 className="font-semibold text-gray-700 mb-3">
+            날짜 미정 작업 ({tasksWithoutDates.length})
+          </h3>
+          <div className="space-y-2">
+            {stages.map(stage => {
+              const stageTasks = stage.tasks.filter(
+                task => !task.startDate || !task.dueDate
+              );
+              if (stageTasks.length === 0) return null;
+
+              return (
+                <div key={stage.id}>
+                  <div className="text-sm font-medium text-gray-600 mb-1">
+                    {stage.name}
+                  </div>
+                  <div className="ml-4 space-y-1">
+                    {stageTasks.map(task => (
+                      <div
+                        key={task.id}
+                        className="text-sm text-gray-700 flex items-center gap-2"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-gray-400" />
+                        {task.title}
+                        {task.assignee && (
+                          <span className="text-xs text-gray-500">
+                            ({task.assignee.name})
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

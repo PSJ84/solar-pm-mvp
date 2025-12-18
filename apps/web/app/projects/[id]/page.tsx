@@ -30,6 +30,8 @@ import { projectsApi, stagesApi, tasksApi, templatesApi, vendorsApi } from '@/li
 import { ChecklistPanel } from '@/components/checklist/ChecklistPanel';
 import { AddTaskModal } from '@/components/tasks/AddTaskModal';
 import { ProjectBudgetTab } from '@/components/budget/ProjectBudgetTab';
+import { GanttChart } from '@/components/gantt/GanttChart';
+import { useGanttData } from '@/hooks/useGanttData';
 import type { Project, ProjectStage, ProjectVendor, Task, TaskHistory, TaskStatus, Vendor, VendorRole } from '@/types';
 import type { TemplateListItemDto } from '../../../../../packages/shared/src/types/template.types';
 
@@ -164,7 +166,7 @@ export default function ProjectDetailPage() {
   const hasInitializedFromUrlRef = useRef(false);
   const [isAddStageModalOpen, setIsAddStageModalOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [activeTab, setActiveTab] = useState<'stages' | 'info' | 'vendors' | 'budget'>('stages');
+  const [activeTab, setActiveTab] = useState<'stages' | 'info' | 'vendors' | 'budget' | 'gantt'>('stages');
   const [projectForm, setProjectForm] = useState({
     name: '',
     address: '',
@@ -1563,6 +1565,18 @@ export default function ProjectDetailPage() {
           >
             예산/정산
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('gantt')}
+            className={cn(
+              'px-4 py-2 text-sm font-semibold rounded-lg border',
+              activeTab === 'gantt'
+                ? 'bg-solar-50 text-solar-700 border-solar-200'
+                : 'bg-white text-slate-700 border-slate-200',
+            )}
+          >
+            간트 차트
+          </button>
         </div>
 
         {activeTab === 'stages' && (
@@ -2053,6 +2067,17 @@ export default function ProjectDetailPage() {
             onToast={(message, type) => showToast(message, type)}
           />
         )}
+
+        {activeTab === 'gantt' && (() => {
+          const ganttData = useGanttData(projectWithDerived);
+          return ganttData ? (
+            <GanttChart data={ganttData} />
+          ) : (
+            <div className="text-center py-12 text-gray-500">
+              간트 차트를 표시할 데이터가 없습니다.
+            </div>
+          );
+        })()}
       </main>
 
       {addTaskModalStageId && projectId && (

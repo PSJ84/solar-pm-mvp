@@ -209,3 +209,35 @@ export interface TodayTasksResponse {
   count: number;
   tasks: Task[];
 }
+
+export interface GanttTask {
+  id: string;
+  title: string;
+  startDate: string | null;
+  dueDate: string | null;
+  completedDate: string | null;
+  status: TaskStatus;
+  progress: number;  // 0-100
+  assignee?: {
+    name: string;
+  } | null;
+  stageId: string;
+  stageName: string;
+}
+
+export interface GanttStage {
+  id: string;
+  name: string;
+  order: number;
+  tasks: GanttTask[];
+}
+
+export interface GanttData {
+  projectName: string;
+  projectId: string;
+  stages: GanttStage[];
+  dateRange: {
+    min: string;
+    max: string;
+  };
+}
