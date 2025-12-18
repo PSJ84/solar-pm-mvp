@@ -238,6 +238,9 @@ export default function ProjectDetailPage() {
     return recalcProjectData(project, project.stages || []);
   }, [project]);
 
+  // Gantt chart data - must be called at top level (React Rules of Hooks)
+  const ganttData = useGanttData(projectWithDerived);
+
   useEffect(() => {
     return () => {
       if (toastTimeoutRef.current) {
@@ -2068,16 +2071,15 @@ export default function ProjectDetailPage() {
           />
         )}
 
-        {activeTab === 'gantt' && (() => {
-          const ganttData = useGanttData(projectWithDerived);
-          return ganttData ? (
+        {activeTab === 'gantt' && (
+          ganttData ? (
             <GanttChart data={ganttData} />
           ) : (
             <div className="text-center py-12 text-gray-500">
               간트 차트를 표시할 데이터가 없습니다.
             </div>
-          );
-        })()}
+          )
+        )}
       </main>
 
       {addTaskModalStageId && projectId && (
