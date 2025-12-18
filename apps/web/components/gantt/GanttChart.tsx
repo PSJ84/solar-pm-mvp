@@ -17,6 +17,14 @@ interface GanttChartProps {
 }
 
 export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
+  // Define TODAY as a constant - calculated ONCE on mount
+  const TODAY = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    console.log('[GanttChart] TODAY constant initialized:', today.toISOString().split('T')[0]);
+    return today;
+  }, []); // Empty dependency array - never recalculates
+
   // Early return with null check
   if (!data) {
     return (
@@ -49,13 +57,20 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
 
   const goToToday = () => {
     const range = getDaysBetween(viewportStart, viewportEnd);
-    const today = new Date();
-    setViewportStart(subDays(today, Math.floor(range / 3)));
-    setViewportEnd(addDays(today, Math.floor(range * 2 / 3)));
+    setViewportStart(subDays(TODAY, Math.floor(range / 3)));
+    setViewportEnd(addDays(TODAY, Math.floor(range * 2 / 3)));
   };
 
   const totalDays = getDaysBetween(viewportStart, viewportEnd) + 1;
   const totalWidth = totalDays * dayWidth;
+
+  // Debug logging
+  console.log('[GanttChart] Render:', {
+    today: TODAY.toISOString().split('T')[0],
+    viewportStart: viewportStart.toISOString().split('T')[0],
+    viewportEnd: viewportEnd.toISOString().split('T')[0],
+    daysDiffFromViewportStart: getDaysBetween(viewportStart, TODAY)
+  });
 
   // 날짜 있는 Task와 없는 Task 분리
   const tasksWithDates = stages.flatMap(stage =>
@@ -125,6 +140,7 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
                 startDate={viewportStart}
                 endDate={viewportEnd}
                 dayWidth={dayWidth}
+                today={TODAY}
               />
             </div>
           </div>

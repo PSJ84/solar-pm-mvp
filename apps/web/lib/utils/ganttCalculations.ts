@@ -28,10 +28,14 @@ export function calculateBarWidth(
 }
 
 // 오늘 날짜의 정확한 위치 계산 (픽셀)
-export function getTodayPosition(viewportStart: Date, dayWidth: number): number {
-  const today = startOfDay(new Date());
+export function getTodayPosition(
+  viewportStart: Date,
+  today: Date,
+  dayWidth: number
+): number {
   const viewStart = startOfDay(viewportStart);
-  const daysDiff = differenceInDays(today, viewStart);
+  const todayNormalized = startOfDay(today);
+  const daysDiff = differenceInDays(todayNormalized, viewStart);
   return daysDiff * dayWidth;
 }
 
