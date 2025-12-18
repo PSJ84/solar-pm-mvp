@@ -26,6 +26,15 @@ export function calculateBarWidth(
   return Math.max(duration * dayWidth, 20); // 최소 20px
 }
 
+// 오늘 날짜의 정확한 위치 계산 (픽셀)
+export function getTodayPosition(viewportStart: Date, dayWidth: number): number {
+  const now = new Date();
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const msSinceStart = now.getTime() - viewportStart.getTime();
+  const daysSinceStart = msSinceStart / msPerDay; // Keep decimals for accuracy
+  return daysSinceStart * dayWidth;
+}
+
 // 타임라인 월 헤더 생성
 export function generateMonthHeaders(
   startDate: Date,

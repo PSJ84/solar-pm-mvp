@@ -1,7 +1,7 @@
 // apps/web/components/gantt/GanttTimeline.tsx
 'use client';
 
-import { generateMonthHeaders, getDaysBetween } from '@/lib/utils/ganttCalculations';
+import { generateMonthHeaders, getDaysBetween, getTodayPosition } from '@/lib/utils/ganttCalculations';
 
 interface GanttTimelineProps {
   startDate: Date;
@@ -14,7 +14,7 @@ export function GanttTimeline({ startDate, endDate, dayWidth }: GanttTimelinePro
   const today = new Date();
   const showTodayLine = today >= startDate && today <= endDate;
   const todayPosition = showTodayLine
-    ? getDaysBetween(startDate, today) * dayWidth
+    ? getTodayPosition(startDate, dayWidth)
     : 0;
 
   return (

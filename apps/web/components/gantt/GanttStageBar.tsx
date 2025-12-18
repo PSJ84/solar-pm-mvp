@@ -42,7 +42,7 @@ export function GanttStageBar({ stage, viewportStart, dayWidth }: GanttStageBarP
       <div
         className={`h-2 rounded border shadow-sm transition-all ${
           isHovered ? GANTT_STAGE_COLORS.barHover : GANTT_STAGE_COLORS.bar
-        } opacity-70`}
+        } opacity-90`}
       >
         {/* Received date milestone marker */}
         {receivedDatePosition !== null && receivedDatePosition >= 0 && receivedDatePosition <= width && (
