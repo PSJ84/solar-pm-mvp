@@ -8,15 +8,23 @@ interface GanttTimelineProps {
   startDate: Date;
   endDate: Date;
   dayWidth: number;
+  today: Date;
 }
 
-export function GanttTimeline({ startDate, endDate, dayWidth }: GanttTimelineProps) {
+export function GanttTimeline({ startDate, endDate, dayWidth, today }: GanttTimelineProps) {
   const monthHeaders = generateMonthHeaders(startDate, endDate);
-  const today = startOfDay(new Date());
   const showTodayLine = today >= startDate && today <= endDate;
   const todayPosition = showTodayLine
-    ? getTodayPosition(startDate, dayWidth)
+    ? getTodayPosition(startDate, today, dayWidth)
     : 0;
+
+  // Debug logging
+  console.log('[GanttTimeline] Today line:', {
+    today: today.toISOString().split('T')[0],
+    startDate: startDate.toISOString().split('T')[0],
+    showTodayLine,
+    todayPosition: `${todayPosition}px`
+  });
 
   return (
     <div className="relative">
