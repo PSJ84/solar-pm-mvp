@@ -17,13 +17,18 @@ export function GanttTimeline({ startDate, endDate, dayWidth, today }: GanttTime
     ? getTodayPosition(startDate, today, dayWidth)
     : 0;
 
-  // Debug logging
+  // Debug logging - 로컬 날짜 포맷
+  const formatLocalDate = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
   console.log('[GanttTimeline] Today line:', {
-    today_date: today.toISOString().split('T')[0],
-    today_local: today.toLocaleString('ko-KR'),
-    startDate_date: startDate.toISOString().split('T')[0],
-    startDate_local: startDate.toLocaleString('ko-KR'),
-    endDate_date: endDate.toISOString().split('T')[0],
+    today: formatLocalDate(today),
+    startDate: formatLocalDate(startDate),
+    endDate: formatLocalDate(endDate),
     showTodayLine,
     todayPosition: `${todayPosition}px`
   });
