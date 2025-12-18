@@ -1,5 +1,4 @@
 // apps/web/lib/utils/ganttCalculations.ts
-import { startOfDay, differenceInDays } from 'date-fns';
 
 // 두 날짜 사이의 일수
 export function getDaysBetween(start: Date, end: Date): number {
@@ -28,14 +27,37 @@ export function calculateBarWidth(
 }
 
 // 오늘 날짜의 정확한 위치 계산 (픽셀)
+// 타임존 문제를 피하기 위해 수동으로 로컬 자정 설정 및 일수 계산
 export function getTodayPosition(
   viewportStart: Date,
   today: Date,
   dayWidth: number
 ): number {
-  const viewStart = startOfDay(viewportStart);
-  const todayNormalized = startOfDay(today);
-  const daysDiff = differenceInDays(todayNormalized, viewStart);
+  // 로컬 타임존 자정으로 정규화 (타임존 변환 없이)
+  const normalizeToMidnight = (date: Date) => {
+    const normalized = new Date(date);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized;
+  };
+
+  const viewStart = normalizeToMidnight(viewportStart);
+  const todayNormalized = normalizeToMidnight(today);
+
+  // 밀리초 차이를 일수로 변환 (타임존 안전)
+  const MS_PER_DAY = 1000 * 60 * 60 * 24;
+  const diffMs = todayNormalized.getTime() - viewStart.getTime();
+  const daysDiff = Math.round(diffMs / MS_PER_DAY);
+
+  console.log('[getTodayPosition]', {
+    viewportStart: viewStart.toISOString().split('T')[0],
+    today: todayNormalized.toISOString().split('T')[0],
+    viewStartLocal: viewStart.toLocaleString('ko-KR'),
+    todayLocal: todayNormalized.toLocaleString('ko-KR'),
+    diffMs,
+    daysDiff,
+    position: daysDiff * dayWidth
+  });
+
   return daysDiff * dayWidth;
 }
 

@@ -21,7 +21,11 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
   const TODAY = useMemo(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    console.log('[GanttChart] TODAY constant initialized:', today.toISOString().split('T')[0]);
+    console.log('[GanttChart] TODAY constant initialized:', {
+      date: today.toISOString().split('T')[0],
+      localString: today.toLocaleString('ko-KR'),
+      timestamp: today.getTime()
+    });
     return today;
   }, []); // Empty dependency array - never recalculates
 
@@ -37,15 +41,30 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
   const { stages, dateRange } = data;
 
   // 날짜 범위에 여유 추가 - useState로 변경하여 네비게이션 가능하게
+  // 로컬 타임존으로 날짜 생성 (UTC 파싱 방지)
   const [viewportStart, setViewportStart] = useState(() => {
-    const date = new Date(dateRange.min);
+    const minDate = new Date(dateRange.min);
+    // 로컬 자정으로 정규화 (타임존 문제 방지)
+    const date = new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate());
     date.setDate(date.getDate() - 7); // 시작일 7일 전부터
+    console.log('[GanttChart] viewportStart initialized:', {
+      original: dateRange.min,
+      normalized: date.toISOString().split('T')[0],
+      localString: date.toLocaleString('ko-KR')
+    });
     return date;
   });
 
   const [viewportEnd, setViewportEnd] = useState(() => {
-    const date = new Date(dateRange.max);
+    const maxDate = new Date(dateRange.max);
+    // 로컬 자정으로 정규화 (타임존 문제 방지)
+    const date = new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate());
     date.setDate(date.getDate() + 14); // 종료일 14일 후까지
+    console.log('[GanttChart] viewportEnd initialized:', {
+      original: dateRange.max,
+      normalized: date.toISOString().split('T')[0],
+      localString: date.toLocaleString('ko-KR')
+    });
     return date;
   });
 
@@ -65,11 +84,27 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
   const totalWidth = totalDays * dayWidth;
 
   // Debug logging
+  const normalizeToMidnight = (date: Date) => {
+    const normalized = new Date(date);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized;
+  };
+
+  const viewStartNorm = normalizeToMidnight(viewportStart);
+  const todayNorm = normalizeToMidnight(TODAY);
+  const MS_PER_DAY = 1000 * 60 * 60 * 24;
+  const diffMs = todayNorm.getTime() - viewStartNorm.getTime();
+  const daysDiff = Math.round(diffMs / MS_PER_DAY);
+
   console.log('[GanttChart] Render:', {
-    today: TODAY.toISOString().split('T')[0],
-    viewportStart: viewportStart.toISOString().split('T')[0],
-    viewportEnd: viewportEnd.toISOString().split('T')[0],
-    daysDiffFromViewportStart: getDaysBetween(viewportStart, TODAY)
+    TODAY_date: TODAY.toISOString().split('T')[0],
+    TODAY_local: TODAY.toLocaleString('ko-KR'),
+    viewportStart_date: viewportStart.toISOString().split('T')[0],
+    viewportStart_local: viewportStart.toLocaleString('ko-KR'),
+    viewportEnd_date: viewportEnd.toISOString().split('T')[0],
+    diffMs,
+    daysDiff,
+    todayPosition: daysDiff * dayWidth
   });
 
   // 날짜 있는 Task와 없는 Task 분리
