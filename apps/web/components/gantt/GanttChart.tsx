@@ -80,11 +80,11 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
       <div className="flex items-center justify-between mb-4 px-4">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => shiftDays(-14)}
+            onClick={() => shiftDays(-7)}
             className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50 flex items-center gap-1"
           >
             <ChevronLeft className="w-4 h-4" />
-            이전 2주
+            {'< 1주'}
           </button>
           <button
             onClick={goToToday}
@@ -93,10 +93,10 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
             오늘
           </button>
           <button
-            onClick={() => shiftDays(14)}
+            onClick={() => shiftDays(7)}
             className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50 flex items-center gap-1"
           >
-            다음 2주
+            {'1주 >'}
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

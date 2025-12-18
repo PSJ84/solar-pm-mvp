@@ -1,4 +1,5 @@
 // apps/web/lib/utils/ganttCalculations.ts
+import { startOfDay, differenceInDays } from 'date-fns';
 
 // 두 날짜 사이의 일수
 export function getDaysBetween(start: Date, end: Date): number {
@@ -28,11 +29,10 @@ export function calculateBarWidth(
 
 // 오늘 날짜의 정확한 위치 계산 (픽셀)
 export function getTodayPosition(viewportStart: Date, dayWidth: number): number {
-  const now = new Date();
-  const msPerDay = 1000 * 60 * 60 * 24;
-  const msSinceStart = now.getTime() - viewportStart.getTime();
-  const daysSinceStart = msSinceStart / msPerDay; // Keep decimals for accuracy
-  return daysSinceStart * dayWidth;
+  const today = startOfDay(new Date());
+  const viewStart = startOfDay(viewportStart);
+  const daysDiff = differenceInDays(today, viewStart);
+  return daysDiff * dayWidth;
 }
 
 // 타임라인 월 헤더 생성
