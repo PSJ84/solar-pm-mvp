@@ -123,6 +123,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.60.5
         version: 5.90.11(react@19.2.0)
+      '@types/lodash':
+        specifier: ^4.17.21
+        version: 4.17.21
       axios:
         specifier: ^1.7.7
         version: 1.13.2
@@ -135,6 +138,9 @@ importers:
       firebase:
         specifier: ^11.0.2
         version: 11.10.0
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21
       lucide-react:
         specifier: ^0.460.0
         version: 0.460.0(react@19.2.0)
@@ -1656,6 +1662,9 @@ packages:
 
   '@types/jsonwebtoken@9.0.5':
     resolution: {integrity: sha512-VRLSGzik+Unrup6BsouBeHsf4d1hOEgYWTm/7Nmw1sXoN1+tRly/Gy/po3yeahnP4jfnQWWAhQAqcNfH7ngOkA==}
+
+  '@types/lodash@4.17.21':
+    resolution: {integrity: sha512-FOvQ0YPD5NOfPgMzJihoT+Za5pdkDJWcbpuj1DjaKZIr/gxodQjY/uWEFlTNqW2ugXHUiL8lRQgw63dzKHZdeQ==}
 
   '@types/long@4.0.2':
     resolution: {integrity: sha512-MqTGEo5bj5t157U6fA/BiDynNkn0YknVdh48CMPkTSpFTVmvao5UQmm7uEF6xBEo7qIMAlY/JSleYaE6VOdpaA==}
@@ -7139,6 +7148,8 @@ snapshots:
   '@types/jsonwebtoken@9.0.5':
     dependencies:
       '@types/node': 22.19.1
+
+  '@types/lodash@4.17.21': {}
 
   '@types/long@4.0.2':
     optional: true
