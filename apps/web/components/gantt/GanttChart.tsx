@@ -1,7 +1,7 @@
 // apps/web/components/gantt/GanttChart.tsx
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import type { GanttData } from '@/types';
@@ -10,6 +10,7 @@ import { GanttBar } from './GanttBar';
 import { GanttStageBar } from './GanttStageBar';
 import { GanttLegend } from './GanttLegend';
 import { getDaysBetween } from '@/lib/utils/ganttCalculations';
+import { startOfToday } from 'date-fns';
 
 interface GanttChartProps {
   data: GanttData;
@@ -17,11 +18,12 @@ interface GanttChartProps {
 }
 
 export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
-  // Define TODAY as a constant - calculated ONCE on mount
-  const TODAY = useMemo(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  }, []); // Empty dependency array - never recalculates
+  // 오늘 날짜를 클라이언트 시간대 기준으로 고정 (SSR 시점 영향 제거)
+  const [today, setToday] = useState<Date>(() => startOfToday());
+
+  useEffect(() => {
+    setToday(startOfToday());
+  }, []);
 
   // Early return with null check
   if (!data) {
@@ -69,10 +71,10 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
     const offsetAfter = range - offsetBefore;
 
     setViewportStart(
-      new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() - offsetBefore)
+      new Date(today.getFullYear(), today.getMonth(), today.getDate() - offsetBefore)
     );
     setViewportEnd(
-      new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() + offsetAfter)
+      new Date(today.getFullYear(), today.getMonth(), today.getDate() + offsetAfter)
     );
   };
 
@@ -147,7 +149,7 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
                 startDate={viewportStart}
                 endDate={viewportEnd}
                 dayWidth={dayWidth}
-                today={TODAY}
+                today={today}
               />
             </div>
           </div>
