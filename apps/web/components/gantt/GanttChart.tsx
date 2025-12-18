@@ -14,6 +14,15 @@ interface GanttChartProps {
 }
 
 export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
+  // Early return with null check
+  if (!data) {
+    return (
+      <div className="text-center py-12 text-gray-500">
+        간트 차트를 표시할 데이터가 없습니다.
+      </div>
+    );
+  }
+
   const { stages, dateRange } = data;
 
   // 날짜 범위에 여유 추가

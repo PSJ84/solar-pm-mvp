@@ -218,53 +218,83 @@ export class DashboardService {
    * [v1.2] API Consolidation - projects, vendors, templates, budgetCategories 추가
    */
   async getFullSummary(userId?: string, companyId?: string): Promise<DashboardSummaryDto> {
-    const resolvedCompanyId = await this.resolveCompanyId(companyId);
+    try {
+      const resolvedCompanyId = await this.resolveCompanyId(companyId);
 
-    // ✅ [API Consolidation] 기존 데이터 + 전역 데이터를 병렬 조회
-    const [
-      todayTasks,
-      upcoming7Days,
-      expiringDocuments,
-      riskProjects,
-      statsBase,
-      projects,
-      myWorkToday,
-      vendors,
-      templates,
-      budgetCategories,
-    ] = await Promise.all([
-      this.getTodayTasksForSummary(userId, resolvedCompanyId),
-      this.getUpcoming7DaysTasksForSummary(userId, resolvedCompanyId),
-      this.getExpiringDocumentsForSummary(resolvedCompanyId),
-      this.getRiskProjectsForSummary(resolvedCompanyId),
-      this.getStatsForSummary(userId, resolvedCompanyId),
-      // ✅ 전역 데이터 조회 (대시보드 진입시 필요한 모든 데이터)
-      this.projectsService.findAll(resolvedCompanyId).catch(() => []),
-      this.getMyWork({ userId: userId || '', companyId: resolvedCompanyId, tab: 'today' }).catch(() => []),
-      this.vendorsService.findAll().catch(() => []),
-      this.templatesService.findAll(resolvedCompanyId).catch(() => []),
-      this.budgetService.getCategories(resolvedCompanyId).catch(() => []),
-    ]);
+      // ✅ [API Consolidation] 기존 데이터 + 전역 데이터를 병렬 조회
+      const [
+        todayTasks,
+        upcoming7Days,
+        expiringDocuments,
+        riskProjects,
+        statsBase,
+        projects,
+        myWorkToday,
+        vendors,
+        templates,
+        budgetCategories,
+      ] = await Promise.all([
+        this.getTodayTasksForSummary(userId, resolvedCompanyId).catch(() => []),
+        this.getUpcoming7DaysTasksForSummary(userId, resolvedCompanyId).catch(() => []),
+        this.getExpiringDocumentsForSummary(resolvedCompanyId).catch(() => []),
+        this.getRiskProjectsForSummary(resolvedCompanyId).catch((): RiskProjectItem[] => []),
+        this.getStatsForSummary(userId, resolvedCompanyId).catch(() => ({
+          totalProjects: 0,
+          inProgressProjects: 0,
+          totalMyTasks: 0,
+          completedMyTasks: 0,
+          todayDueCount: 0,
+          riskProjectCount: 0,
+        })),
+        // ✅ 전역 데이터 조회 (대시보드 진입시 필요한 모든 데이터)
+        this.projectsService.findAll(resolvedCompanyId).catch(() => []),
+        this.getMyWork({ userId: userId || '', companyId: resolvedCompanyId, tab: 'today' }).catch(() => []),
+        this.vendorsService.findAll().catch(() => []),
+        this.templatesService.findAll(resolvedCompanyId).catch(() => []),
+        this.budgetService.getCategories(resolvedCompanyId).catch(() => []),
+      ]);
 
-    const stats: DashboardSummaryDto['stats'] = {
-      ...statsBase,
-      // ✅ riskProjects는 이미 위에서 계산했으니 여기서만 카운트
-      riskProjectCount: riskProjects.filter((p) => p.riskScore >= 80).length,
-    };
+      const stats: DashboardSummaryDto['stats'] = {
+        ...statsBase,
+        // ✅ riskProjects는 이미 위에서 계산했으니 여기서만 카운트
+        riskProjectCount: riskProjects.filter((p) => p.riskScore >= 80).length,
+      };
 
-    return {
-      todayTasks,
-      upcoming7Days,
-      expiringDocuments,
-      riskProjects,
-      stats,
-      // ✅ [API Consolidation] 전역 데이터 추가
-      projects,
-      myWorkToday,
-      vendors,
-      templates,
-      budgetCategories,
-    };
+      return {
+        todayTasks,
+        upcoming7Days,
+        expiringDocuments,
+        riskProjects,
+        stats,
+        // ✅ [API Consolidation] 전역 데이터 추가
+        projects,
+        myWorkToday,
+        vendors,
+        templates,
+        budgetCategories,
+      };
+    } catch (error) {
+      console.error('Failed to load full dashboard summary', error);
+      return {
+        todayTasks: [],
+        upcoming7Days: [],
+        expiringDocuments: [],
+        riskProjects: [],
+        stats: {
+          totalProjects: 0,
+          inProgressProjects: 0,
+          totalMyTasks: 0,
+          completedMyTasks: 0,
+          todayDueCount: 0,
+          riskProjectCount: 0,
+        },
+        projects: [],
+        myWorkToday: [],
+        vendors: [],
+        templates: [],
+        budgetCategories: [],
+      };
+    }
   }
 
   private async getTodayTasksForSummary(
@@ -375,9 +405,9 @@ export class DashboardService {
     });
 
     return documents.map((doc) => {
-      const daysUntilExpiry = Math.ceil(
-        (doc.expiryDate!.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-      );
+      const daysUntilExpiry = doc.expiryDate
+        ? Math.ceil((doc.expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        : 0;
       return {
         id: doc.id,
         fileName: doc.fileName,
@@ -447,7 +477,7 @@ export class DashboardService {
       const completionRate = allTasks.length > 0 ? completedTasks.length / allTasks.length : 0;
 
       const activeStage = project.stages.find((s) => s.status === 'active');
-      const stageWeight = activeStage?.template.order || 1;
+      const stageWeight = activeStage?.template?.order || 1;
 
       let riskScore =
         maxDelayDays * stageWeight + overdueTasks.length * 10 + (1 - completionRate) * 20;
