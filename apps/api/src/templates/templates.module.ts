@@ -8,5 +8,6 @@ import { PrismaModule } from '../prisma/prisma.module';
   imports: [PrismaModule],
   controllers: [TemplatesController],
   providers: [TemplatesService],
+  exports: [TemplatesService], // ✅ DashboardService에서 사용하기 위해 export
 })
 export class TemplatesModule {}

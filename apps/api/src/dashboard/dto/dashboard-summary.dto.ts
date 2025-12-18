@@ -98,4 +98,20 @@ export class DashboardSummaryDto {
     todayDueCount: number;
     riskProjectCount: number;
   };
+
+  // ✅ [API Consolidation] 대시보드 진입시 필요한 전역 데이터 통합
+  @ApiProperty({ required: false })
+  projects?: any[]; // 프로젝트 목록
+
+  @ApiProperty({ required: false })
+  myWorkToday?: any[]; // My Work 오늘 탭 초기 데이터
+
+  @ApiProperty({ required: false })
+  vendors?: any[]; // 협력사 목록 (전역)
+
+  @ApiProperty({ required: false })
+  templates?: any[]; // 템플릿 목록 (전역)
+
+  @ApiProperty({ required: false })
+  budgetCategories?: any[]; // 예산 카테고리 (전역)
 }

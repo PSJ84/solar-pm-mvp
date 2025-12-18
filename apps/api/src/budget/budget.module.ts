@@ -9,5 +9,6 @@ import { BudgetTimingInterceptor } from './interceptors/budget-timing.intercepto
   imports: [PrismaModule],
   controllers: [BudgetController],
   providers: [BudgetService, BudgetTimingInterceptor],
+  exports: [BudgetService], // ✅ DashboardService에서 사용하기 위해 export
 })
 export class BudgetModule {}

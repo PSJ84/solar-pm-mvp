@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { TodayWidget } from '@/components/dashboard/TodayWidget';
 import { RiskProjectsBanner } from '@/components/dashboard/RiskProjectsBanner';
 import { ProjectList } from '@/components/dashboard/ProjectList';
@@ -12,12 +12,33 @@ import { MyWorkSection } from '@/components/dashboard/MyWorkSection';
 import { dashboardApi, DashboardFullSummary } from '@/lib/api';
 
 export default function DashboardPage() {
-  // [v1.1] 통합 Summary API 호출
+  const queryClient = useQueryClient();
+
+  // [v1.2] API Consolidation - 통합 Summary API 호출 (projects, vendors 등 포함)
   const { data: summary, isLoading, error } = useQuery<DashboardFullSummary>({
     queryKey: ['dashboard', 'full-summary'],
     queryFn: async () => {
       const res = await dashboardApi.getFullSummary();
-      return res.data;
+      const data = res.data;
+
+      // ✅ 통합 API에서 받은 데이터를 각 쿼리 캐시에 프리로드
+      if (data.projects) {
+        queryClient.setQueryData(['projects'], data.projects);
+      }
+      if (data.myWorkToday) {
+        queryClient.setQueryData(['dashboard', 'my-work', 'today'], data.myWorkToday);
+      }
+      if (data.vendors) {
+        queryClient.setQueryData(['vendors'], data.vendors);
+      }
+      if (data.templates) {
+        queryClient.setQueryData(['templates'], data.templates);
+      }
+      if (data.budgetCategories) {
+        queryClient.setQueryData(['budget', 'categories'], data.budgetCategories);
+      }
+
+      return data;
     },
     // 개발 중에는 에러가 나도 fallback 데이터 사용
     retry: 1,
