@@ -634,30 +634,46 @@ export class ProjectsService {
    * 프로젝트 최근 활동 로그 조회 (MVP #30)
    */
   async getActivityLog(projectId: string, companyId?: string, limit = 20) {
-    await this.findOne(projectId, companyId);
-
-    const histories = await this.prisma.taskHistory.findMany({
-      where: {
-        task: {
+    try {
+      // 프로젝트 존재 확인
+      const project = await this.prisma.project.findFirst({
+        where: {
+          id: projectId,
+          ...(companyId ? { companyId } : {}),
           deletedAt: null,
-          projectStage: {
+        },
+      });
+
+      if (!project) {
+        return [];
+      }
+
+      const histories = await this.prisma.taskHistory.findMany({
+        where: {
+          task: {
             deletedAt: null,
-            projectId,
+            projectStage: {
+              deletedAt: null,
+              projectId,
+            },
           },
         },
-      },
-      include: {
-        user: {
-          select: { id: true, name: true, email: true },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true },
+          },
+          task: {
+            select: { id: true, title: true },
+          },
         },
-        task: {
-          select: { id: true, title: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    });
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      });
 
-    return histories;
+      return histories ?? [];
+    } catch (error) {
+      console.error('getActivityLog error:', error);
+      return [];
+    }
   }
 }
