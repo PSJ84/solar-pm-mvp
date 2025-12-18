@@ -324,13 +324,18 @@ export class DashboardService {
     const day30 = new Date(today);
     day30.setDate(day30.getDate() + 30);
 
+    // ✅ 성능 최적화: include 대신 select로 필요한 필드만 조회
     const documents = await this.prisma.document.findMany({
       where: {
         deletedAt: null,
         expiryDate: { gte: today, lte: day30 },
         project: { companyId, deletedAt: null },
       },
-      include: {
+      select: {
+        id: true,
+        fileName: true,
+        docType: true,
+        expiryDate: true,
         project: { select: { id: true, name: true } },
       },
       orderBy: { expiryDate: 'asc' },
@@ -353,29 +358,31 @@ export class DashboardService {
   }
 
   private async getRiskProjectsForSummary(companyId: string): Promise<RiskProjectItem[]> {
-    const includeNotificationColumn = await this.prisma.hasTaskNotificationEnabledColumn();
-
+    // ✅ 성능 최적화: include 대신 select로 필요한 필드만 조회
     const projects = await this.prisma.project.findMany({
       where: {
         companyId,
         deletedAt: null,
         status: 'in_progress',
       },
-      include: {
+      select: {
+        id: true,
+        name: true,
         stages: {
           where: { deletedAt: null, isActive: true },
-          include: {
+          select: {
+            id: true,
+            status: true,
+            isActive: true,
+            template: { select: { order: true } },
             tasks: {
               where: { deletedAt: null, isActive: true },
               select: {
                 id: true,
                 status: true,
                 dueDate: true,
-                isActive: true,
-                ...(includeNotificationColumn ? { notificationEnabled: true } : {}),
               },
             },
-            template: true,
           },
         },
       },
@@ -437,22 +444,22 @@ export class DashboardService {
           completionRate: Math.round(completionRate * 100) / 100,
         });
 
-        // (참고) 이 부분은 대시보드 새로고침마다 DB에 계속 쌓이므로 느려질 수 있어요.
-        // 필요하면 env 플래그로 켜고 끄는 걸 추천합니다.
-        this.prisma.delayRiskScore
-          .create({
-            data: {
-              projectId: project.id,
-              score: riskScore,
-              severity,
-              overdueTaskCount: overdueTasks.length,
-              upcomingTaskCount: 0,
-              completionRate,
-              maxDelayDays,
-              factors,
-            },
-          })
-          .catch(() => {});
+        // ✅ 성능 최적화: 대시보드 조회마다 DB에 쓰기 작업을 하지 않도록 주석 처리
+        // 필요 시 별도 배치 작업이나 webhook으로 처리 권장
+        // this.prisma.delayRiskScore
+        //   .create({
+        //     data: {
+        //       projectId: project.id,
+        //       score: riskScore,
+        //       severity,
+        //       overdueTaskCount: overdueTasks.length,
+        //       upcomingTaskCount: 0,
+        //       completionRate,
+        //       maxDelayDays,
+        //       factors,
+        //     },
+        //   })
+        //   .catch(() => {});
       }
     }
 

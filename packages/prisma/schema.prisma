@@ -145,6 +145,8 @@ model Project {
   @@index([status])
   @@index([externalId])
   @@index([deletedAt])
+  @@index([companyId, status, deletedAt])
+  @@index([companyId, deletedAt])
   @@map("projects")
 }
 
@@ -240,6 +242,8 @@ model ProjectStage {
   @@index([projectId])
   @@index([status])
   @@index([deletedAt])
+  @@index([deletedAt, isActive])
+  @@index([projectId, deletedAt, isActive])
   @@map("project_stages")
 }
 
@@ -309,6 +313,9 @@ model Task {
   @@index([status])
   @@index([status, dueDate])
   @@index([deletedAt])
+  @@index([deletedAt, isActive, status])
+  @@index([assigneeId, deletedAt, isActive])
+  @@index([dueDate, deletedAt, isActive])
   @@map("tasks")
 }
 
@@ -436,6 +443,7 @@ model Document {
   @@index([expiryDate])
   @@index([externalId])
   @@index([deletedAt])
+  @@index([deletedAt, expiryDate])
   @@map("documents")
 }
 
