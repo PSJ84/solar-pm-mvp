@@ -7,13 +7,13 @@ interface GanttTimelineProps {
   startDate: Date;
   endDate: Date;
   dayWidth: number;
-  today: Date;
+  today: Date | null;
 }
 
 export function GanttTimeline({ startDate, endDate, dayWidth, today }: GanttTimelineProps) {
   const monthHeaders = generateMonthHeaders(startDate, endDate);
-  const showTodayLine = isBetweenDays(today, startDate, endDate);
-  const todayPosition = showTodayLine
+  const showTodayLine = today ? isBetweenDays(today, startDate, endDate) : false;
+  const todayPosition = showTodayLine && today
     ? getTodayPosition(startDate, today, dayWidth)
     : 0;
 

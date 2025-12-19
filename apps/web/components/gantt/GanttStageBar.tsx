@@ -4,16 +4,17 @@
 import { useState } from 'react';
 import type { GanttStage } from '@/types';
 import { GANTT_STAGE_COLORS, GANTT_MILESTONE_COLORS } from '@/lib/utils/ganttColors';
-import { calculateBarPosition, calculateBarWidth, getLocalToday } from '@/lib/utils/ganttCalculations';
+import { calculateBarPosition, calculateBarWidth } from '@/lib/utils/ganttCalculations';
 import { formatDate } from '@/lib/utils';
 
 interface GanttStageBarProps {
   stage: GanttStage;
   viewportStart: Date;
   dayWidth: number;
+  today: Date;
 }
 
-export function GanttStageBar({ stage, viewportStart, dayWidth }: GanttStageBarProps) {
+export function GanttStageBar({ stage, viewportStart, dayWidth, today }: GanttStageBarProps) {
   const [isHovered, setIsHovered] = useState(false);
 
   // Calculate end date for stage bar
@@ -22,7 +23,7 @@ export function GanttStageBar({ stage, viewportStart, dayWidth }: GanttStageBarP
       return new Date(stage.completedDate);  // Completed: use completedDate
     }
     if (stage.startDate) {
-      return getLocalToday();  // In progress: show until today
+      return today;  // In progress: show until today
     }
     return null;  // No startDate: don't show bar
   };
