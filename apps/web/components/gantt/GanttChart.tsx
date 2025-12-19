@@ -1,7 +1,7 @@
 // apps/web/components/gantt/GanttChart.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import type { GanttData } from '@/types';
@@ -9,7 +9,7 @@ import { GanttTimeline } from './GanttTimeline';
 import { GanttBar } from './GanttBar';
 import { GanttStageBar } from './GanttStageBar';
 import { GanttLegend } from './GanttLegend';
-import { getDaysBetween, addDaysLocal } from '@/lib/utils/ganttCalculations';
+import { addDaysLocal, getDaysBetween, getLocalToday } from '@/lib/utils/ganttCalculations';
 
 interface GanttChartProps {
   data: GanttData;
@@ -17,16 +17,9 @@ interface GanttChartProps {
 }
 
 export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
-  // 오늘 날짜를 클라이언트 시간대 기준으로 고정 (SSR 시점 영향 제거)
-  const [today, setToday] = useState<Date>(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  });
-
-  useEffect(() => {
-    const now = new Date();
-    setToday(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
-  }, []);
+  // 오늘 날짜를 dayNumber 기반으로 고정 (주간 이동 시 변동 방지)
+  const todayRef = useRef<Date>(getLocalToday());
+  const today = todayRef.current;
 
   // Early return with null check
   if (!data) {
