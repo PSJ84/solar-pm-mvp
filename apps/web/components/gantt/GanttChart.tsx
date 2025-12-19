@@ -1,7 +1,7 @@
 // apps/web/components/gantt/GanttChart.tsx
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import type { GanttData } from '@/types';
@@ -17,11 +17,16 @@ interface GanttChartProps {
 }
 
 export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
-  // Define TODAY as a constant - calculated ONCE on mount
-  const TODAY = useMemo(() => {
+  // 오늘 날짜를 클라이언트 시간대 기준으로 고정 (SSR 시점 영향 제거)
+  const [today, setToday] = useState<Date>(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  }, []); // Empty dependency array - never recalculates
+  });
+
+  useEffect(() => {
+    const now = new Date();
+    setToday(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  }, []);
 
   // Early return with null check
   if (!data) {
@@ -62,8 +67,8 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
     const offsetBefore = Math.floor(range / 3);
     const offsetAfter = range - offsetBefore;
 
-    setViewportStart(addDaysLocal(TODAY, -offsetBefore));
-    setViewportEnd(addDaysLocal(TODAY, offsetAfter));
+    setViewportStart(addDaysLocal(today, -offsetBefore));
+    setViewportEnd(addDaysLocal(today, offsetAfter));
   };
 
   const totalDays = getDaysBetween(viewportStart, viewportEnd) + 1;
@@ -137,7 +142,7 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
                 startDate={viewportStart}
                 endDate={viewportEnd}
                 dayWidth={dayWidth}
-                today={TODAY}
+                today={today}
               />
             </div>
           </div>
