@@ -8,6 +8,17 @@ export function dayNumber(d: Date): number {
   return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS);
 }
 
+// UTC 하루 번호를 로컬 자정 Date로 변환 (역변환)
+export function dayNumberToDate(dayNum: number): Date {
+  const utcDate = new Date(dayNum * DAY_MS);
+  return new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate());
+}
+
+// 로컬 오늘 날짜를 dayNumber 기반으로 고정된 Date로 반환
+export function getLocalToday(): Date {
+  return dayNumberToDate(dayNumber(new Date()));
+}
+
 // 두 날짜 사이의 일수 (정수, round 불필요)
 export function getDaysBetween(start: Date, end: Date): number {
   return dayNumber(end) - dayNumber(start);
