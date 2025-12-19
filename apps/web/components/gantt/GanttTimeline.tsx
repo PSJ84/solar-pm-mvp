@@ -1,7 +1,7 @@
 // apps/web/components/gantt/GanttTimeline.tsx
 'use client';
 
-import { generateMonthHeaders, getDaysBetween, getTodayPosition } from '@/lib/utils/ganttCalculations';
+import { generateMonthHeaders, getDaysBetween, getTodayPosition, isBetweenDays, addDaysLocal } from '@/lib/utils/ganttCalculations';
 
 interface GanttTimelineProps {
   startDate: Date;
@@ -12,7 +12,7 @@ interface GanttTimelineProps {
 
 export function GanttTimeline({ startDate, endDate, dayWidth, today }: GanttTimelineProps) {
   const monthHeaders = generateMonthHeaders(startDate, endDate);
-  const showTodayLine = today >= startDate && today <= endDate;
+  const showTodayLine = isBetweenDays(today, startDate, endDate);
   const todayPosition = showTodayLine
     ? getTodayPosition(startDate, today, dayWidth)
     : 0;
@@ -37,8 +37,7 @@ export function GanttTimeline({ startDate, endDate, dayWidth, today }: GanttTime
         {Array.from({
           length: getDaysBetween(startDate, endDate) + 1,
         }).map((_, idx) => {
-          const currentDate = new Date(startDate);
-          currentDate.setDate(currentDate.getDate() + idx);
+          const currentDate = addDaysLocal(startDate, idx);
           const day = currentDate.getDate();
           const isWeekend = [0, 6].includes(currentDate.getDay());
 

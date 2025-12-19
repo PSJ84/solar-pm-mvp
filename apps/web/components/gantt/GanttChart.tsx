@@ -9,7 +9,7 @@ import { GanttTimeline } from './GanttTimeline';
 import { GanttBar } from './GanttBar';
 import { GanttStageBar } from './GanttStageBar';
 import { GanttLegend } from './GanttLegend';
-import { getDaysBetween } from '@/lib/utils/ganttCalculations';
+import { getDaysBetween, addDaysLocal } from '@/lib/utils/ganttCalculations';
 
 interface GanttChartProps {
   data: GanttData;
@@ -40,27 +40,21 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
     const minDate = new Date(dateRange.min);
     // 로컬 자정으로 정규화 (타임존 문제 방지)
     const date = new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate());
-    date.setDate(date.getDate() - 7); // 시작일 7일 전부터
-    return date;
+    return addDaysLocal(date, -7); // 시작일 7일 전부터
   });
 
   const [viewportEnd, setViewportEnd] = useState(() => {
     const maxDate = new Date(dateRange.max);
     // 로컬 자정으로 정규화 (타임존 문제 방지)
     const date = new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate());
-    date.setDate(date.getDate() + 14); // 종료일 14일 후까지
-    return date;
+    return addDaysLocal(date, 14); // 종료일 14일 후까지
   });
 
   // 날짜 네비게이션 함수들
   // date-fns 제거: 수동으로 날짜 계산 (타임존 문제 방지)
   const shiftDays = (days: number) => {
-    setViewportStart(prev =>
-      new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + days)
-    );
-    setViewportEnd(prev =>
-      new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + days)
-    );
+    setViewportStart(prev => addDaysLocal(prev, days));
+    setViewportEnd(prev => addDaysLocal(prev, days));
   };
 
   const goToToday = () => {
@@ -68,12 +62,8 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
     const offsetBefore = Math.floor(range / 3);
     const offsetAfter = range - offsetBefore;
 
-    setViewportStart(
-      new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() - offsetBefore)
-    );
-    setViewportEnd(
-      new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() + offsetAfter)
-    );
+    setViewportStart(addDaysLocal(TODAY, -offsetBefore));
+    setViewportEnd(addDaysLocal(TODAY, offsetAfter));
   };
 
   const totalDays = getDaysBetween(viewportStart, viewportEnd) + 1;

@@ -2,7 +2,6 @@
 'use client';
 
 import { useState } from 'react';
-import { startOfDay } from 'date-fns';
 import type { GanttStage } from '@/types';
 import { GANTT_STAGE_COLORS, GANTT_MILESTONE_COLORS } from '@/lib/utils/ganttColors';
 import { calculateBarPosition, calculateBarWidth } from '@/lib/utils/ganttCalculations';
@@ -23,7 +22,8 @@ export function GanttStageBar({ stage, viewportStart, dayWidth }: GanttStageBarP
       return new Date(stage.completedDate);  // Completed: use completedDate
     }
     if (stage.startDate) {
-      return startOfDay(new Date());  // In progress: show until today
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate());  // In progress: show until today
     }
     return null;  // No startDate: don't show bar
   };

@@ -1,17 +1,27 @@
 // apps/web/lib/utils/ganttCalculations.ts
 
-// 로컬 자정으로 정규화 (타임존 문제 방지)
-function normalizeDate(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// 로컬 날짜(년/월/일)를 UTC 기준 "하루 번호"로 변환
+// 이렇게 하면 타임존에 관계없이 안정적인 날짜 비교 가능
+export function dayNumber(d: Date): number {
+  return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS);
 }
 
-// 두 날짜 사이의 일수 (정규화 후 계산)
-// 모든 날짜 계산의 기준이 되는 함수!
+// 두 날짜 사이의 일수 (정수, round 불필요)
 export function getDaysBetween(start: Date, end: Date): number {
-  const startNorm = normalizeDate(start);
-  const endNorm = normalizeDate(end);
-  const diffTime = endNorm.getTime() - startNorm.getTime();
-  return Math.round(diffTime / (1000 * 60 * 60 * 24));
+  return dayNumber(end) - dayNumber(start);
+}
+
+// 로컬 날짜에 일수 더하기 (타임존 안전)
+export function addDaysLocal(d: Date, days: number): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
+}
+
+// 날짜가 범위 안에 있는지 확인 (달력 날짜 기준)
+export function isBetweenDays(target: Date, start: Date, end: Date): boolean {
+  const t = dayNumber(target);
+  return t >= dayNumber(start) && t <= dayNumber(end);
 }
 
 // Task 바 위치 계산 (픽셀)
@@ -34,26 +44,24 @@ export function calculateBarWidth(
   return Math.max(duration * dayWidth, 20); // 최소 20px
 }
 
-// 오늘 위치 계산 - getDaysBetween과 동일한 방식 사용!
+// 오늘 위치 계산 (픽셀)
 export function getTodayPosition(
   viewportStart: Date,
   today: Date,
   dayWidth: number
 ): number {
-  const daysDiff = getDaysBetween(viewportStart, today);
-  return daysDiff * dayWidth;
+  return getDaysBetween(viewportStart, today) * dayWidth;
 }
 
-// 타임라인 월 헤더 생성
+// 월 헤더 생성
 export function generateMonthHeaders(
-  startDate: Date,
-  endDate: Date
-): Array<{ month: string; year: string; dayCount: number }> {
-  const headers: Array<{ month: string; year: string; dayCount: number }> = [];
-  const startNorm = normalizeDate(startDate);
-  const endNorm = normalizeDate(endDate);
+  start: Date,
+  end: Date
+): Array<{ year: number; month: string; dayCount: number }> {
+  const headers: Array<{ year: number; month: string; dayCount: number }> = [];
 
-  let current = new Date(startNorm);
+  let current = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const endNorm = new Date(end.getFullYear(), end.getMonth(), end.getDate());
 
   while (current <= endNorm) {
     const year = current.getFullYear();
@@ -67,7 +75,7 @@ export function generateMonthHeaders(
     const dayCount = getDaysBetween(current, displayEnd) + 1;
 
     headers.push({
-      year: `${year}`,
+      year,
       month: `${month + 1}월`,
       dayCount,
     });
