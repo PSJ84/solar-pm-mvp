@@ -1,7 +1,7 @@
 // apps/web/components/gantt/GanttChart.tsx
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import type { GanttData } from '@/types';
@@ -17,9 +17,11 @@ interface GanttChartProps {
 }
 
 export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
-  // 오늘 날짜를 dayNumber 기반으로 고정 (주간 이동 시 변동 방지)
-  const todayRef = useRef<Date>(getLocalToday());
-  const today = todayRef.current;
+  const [today, setToday] = useState<Date | null>(null);
+
+  useEffect(() => {
+    setToday(getLocalToday());
+  }, []);
 
   // Early return with null check
   if (!data) {
@@ -56,6 +58,8 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
   };
 
   const goToToday = () => {
+    if (!today) return;
+
     const range = getDaysBetween(viewportStart, viewportEnd);
     const offsetBefore = Math.floor(range / 3);
     const offsetAfter = range - offsetBefore;
@@ -207,11 +211,14 @@ export function GanttChart({ data, dayWidth = 40 }: GanttChartProps) {
                       <div className="h-8 border-b border-gray-300" />
                       {/* Stage Bar 행 */}
                       <div className="h-6 border-b border-gray-200 relative flex items-center px-2">
-                        <GanttStageBar
-                          stage={stage}
-                          viewportStart={viewportStart}
-                          dayWidth={dayWidth}
-                        />
+                        {today && (
+                          <GanttStageBar
+                            stage={stage}
+                            viewportStart={viewportStart}
+                            dayWidth={dayWidth}
+                            today={today}
+                          />
+                        )}
                       </div>
                       {/* Task 바들 */}
                       {stageTasks.map(task => (
